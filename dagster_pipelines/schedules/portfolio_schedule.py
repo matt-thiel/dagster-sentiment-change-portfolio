@@ -1,6 +1,6 @@
 from dagster import ScheduleDefinition, define_asset_job
 
-from portfolio_asset import portfolio_asset
+from dagster_pipelines.assets.portfolio_asset import portfolio_asset
 
 # Define a job to materialize the spy_position asset
 portfolio_job = define_asset_job("portfolio_job", selection=[portfolio_asset])
