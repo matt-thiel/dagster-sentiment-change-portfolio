@@ -1,6 +1,4 @@
-code_location:
-  # The Python module with definitions for assets, jobs, and schedules.
-  module_name: dagster_pipelines
-
-python:
-  requirements_file: requirements.txt
+locations:
+  - location_name: dagster_pipelines
+    code_source:
+      package_name: dagster_pipelines
