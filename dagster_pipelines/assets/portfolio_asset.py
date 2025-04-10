@@ -2,12 +2,22 @@
 This asset is used to generate a position for the SPY ETF.
 """
 
+import os
+import pprint
 from datetime import datetime, timedelta
 
+import boto3
 import pandas as pd
 import pandas_market_calendars as mcal
 import yfinance as yf
 from dagster import DailyPartitionsDefinition, asset, build_op_context
+from dotenv import load_dotenv
+from vbase import VBaseClient, VBaseDataset, VBaseStringObject
+
+# Define the name of the portfolio set (collection).
+# This is the vBase set (collection) that receive the object commitments (stamps)
+# for the individual portfolios.
+PORTFOLIO_NAME = "TestPortfolio"
 
 # Define a daily partition for portfolio rebalancing.
 partitions_def = DailyPartitionsDefinition(start_date="2025-01-01")
@@ -18,6 +28,25 @@ def portfolio_asset(context):
     """
     This asset is used to generate a position for the SPY ETF.
     """
+
+    # Load the environment variables and check that settings are defined.
+    load_dotenv()
+    # Check that all the required settings are defined:
+    required_settings = [
+        "VBASE_COMMITMENT_SERVICE_CLASS",
+        "VBASE_FORWARDER_URL",
+        "VBASE_API_KEY",
+        "VBASE_COMMITMENT_SERVICE_PRIVATE_KEY",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "S3_BUCKET",
+        "S3_FOLDER",
+    ]
+    for setting in required_settings:
+        if setting not in os.environ:
+            raise ValueError(f"{setting} environment variable is not set.")
+    bucket = os.environ["S3_BUCKET"]
+    folder = os.environ["S3_FOLDER"]
 
     # Get the current partition date.
     partition_date = context.asset_partition_key_for_output()
@@ -96,14 +125,32 @@ def portfolio_asset(context):
 
     # Create a DataFrame for the position.
     position_df = pd.DataFrame({"sym": ["SPY"], "wt": [weight]})
-    context.log.info(f"{partition_date} position_df = \n{position_df}")
+    context.log.info(f"{partition_date}: position_df = \n{position_df}")
 
-    # Save the position to a CSV file.
-    """
-    output_path = f'spy_position_{partition_date}.csv'
-    position_df.to_csv(output_path, index=False)
-    context.log.info(f"Position for {partition_date} saved to {output_path}.")
-    """
+    # Save the position to a CSV file in an S3 bucket.
+    # Use the boto3 library to save the file to the bucket
+    # and folder specified in the environment variables.
+    # Create the filename using a format: portfolio--2024-12-11_07-58-46.csv
+    # recognized by vBase validation tools and the current timestamp.
+    filename = f"portfolio--{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv"
+    s3_client = boto3.client("s3")
+    context.log.info(f"Saving portfolio to s3://{bucket}/{folder}/{filename}")
+    body = position_df.to_csv(index=False)
+    context.log.info(f"{partition_date}: body = \n{body}")
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=f"{folder}/{filename}",
+        Body=body,
+    )
+
+    # Make a vBase stamp of the portfolio.
+    vbc = VBaseClient.create_instance_from_env()
+    # Create the dataset object, if necessary.
+    # This operation is idempotent.
+    ds = VBaseDataset(vbc, PORTFOLIO_NAME, VBaseStringObject)
+    # Add a record to the dataset.
+    receipt = ds.add_record("body")
+    context.log.info(f"ds.add_record() receipt:\n{pprint.pformat(receipt)}")
 
 
 if __name__ == "__main__":
