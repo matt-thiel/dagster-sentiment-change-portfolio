@@ -3,132 +3,101 @@ This module contains the logic for producing portfolio positions.
 """
 
 from datetime import datetime, timedelta
-from typing import Optional
 
 import pandas as pd
 import pandas_market_calendars as mcal
 import yfinance as yf
 
 
-def produce_portfolio(
-    portfolio_date: str, logger: Optional[object] = None
-) -> pd.DataFrame:
+def produce_portfolio(portfolio_date: str, logger: object) -> pd.DataFrame:
     """
-    Produce the portfolio position for SPY based on the partition date.
+    Produce the portfolio that is long SPY if the price return is positive and short
+    SPY if the price return is negative for the 1-day period ending at the portfolio
+    time with 15 minute tolerance.
 
     Args:
         portfolio_date: The date for which to produce the portfolio in YYYY-MM-DD format.
-        logger: Optional logger object for logging messages. If None, no logging is performed.
+        logger: Logger object for logging messages.
 
     Returns:
         A DataFrame containing the position with columns ['sym', 'wt'].
 
     Raises:
-        ValueError: If the partition date is not a trading day or if data is not available.
+        ValueError: If the portfolio date is not a trading day or if data is not available.
     """
 
-    # Define the NYSE calendar.
-    nyse = mcal.get_calendar("NYSE")
-    if logger:
-        logger.info(f"Using NYSE calendar for {portfolio_date}")
-
-    # Get the schedule for the partition date.
-    schedule = nyse.schedule(start_date=portfolio_date, end_date=portfolio_date)
-
+    # Get the NYSE schedule for the portfolio date.
+    schedule = mcal.get_calendar("NYSE").schedule(
+        start_date=portfolio_date, end_date=portfolio_date
+    )
     if schedule.empty:
-        if logger:
-            logger.warning(f"No trading on {portfolio_date}.")
+        logger.warning(f"No trading on {portfolio_date}.")
         raise ValueError(f"No trading on {portfolio_date}.")
 
-    # Get the market close time for the partition date.
-    market_close = schedule.iloc[0]["market_close"]
-    if logger:
-        logger.info(
-            f"Market close time for {portfolio_date}: {market_close.strftime('%H:%M')}"
-        )
+    # Calculate the target time (10 minutes before market close).
+    target_time = schedule.iloc[0]["market_close"] - timedelta(minutes=10)
+    logger.info(
+        f"Market close time for {portfolio_date}: "
+        f"{schedule.iloc[0]['market_close'].strftime('%H:%M')}"
+    )
+    logger.info(f"Target time for price: {target_time.strftime('%H:%M')}")
 
-    # Calculate the time 15 minutes before market close.
-    target_time = market_close - timedelta(minutes=15)
-    if logger:
-        logger.info(f"Target time for price: {target_time.strftime('%H:%M')}")
-
-    # Format the partition date and target time for yfinance.
-    partition_datetime = datetime.strptime(portfolio_date, "%Y-%m-%d")
-    target_datetime = datetime.combine(partition_datetime.date(), target_time.time())
-
-    # For current date, we need to check if we're past the target time.
+    # Check if we're dealing with current date and if we're past the target time.
+    portfolio_datetime = datetime.strptime(portfolio_date, "%Y-%m-%d")
     current_datetime = datetime.now()
-    is_current_date = partition_datetime.date() == current_datetime.date()
-    if logger:
-        logger.info(f"Current time: {current_datetime.strftime('%Y-%m-%d %H:%M')}")
-        logger.info(f"Is current date: {is_current_date}")
+    is_current_date = portfolio_datetime.date() == current_datetime.date()
+    logger.info(f"Current time: {current_datetime.strftime('%Y-%m-%d %H:%M')}")
+    logger.info(f"Is current date: {is_current_date}")
 
-    if is_current_date and current_datetime < target_datetime:
-        if logger:
-            logger.warning(
-                f"Current time is before target time ({target_time.strftime('%H:%M')})."
-            )
-        raise ValueError(
+    if is_current_date and current_datetime < datetime.combine(
+        portfolio_datetime.date(), target_time.time()
+    ):
+        error_message = (
             f"Current time is before target time ({target_time.strftime('%H:%M')})."
         )
+        logger.error(error_message)
+        raise ValueError(error_message)
 
-    # Fetch intraday data for the partition date.
+    # Fetch and process SPY data.
     spy_ticker = yf.Ticker("SPY")
-    if logger:
-        logger.info("Fetching SPY data...")
 
-    if is_current_date:
-        # For current date, get data up to now.
-        spy_data = spy_ticker.history(
-            start=portfolio_date, end=current_datetime, interval="15m"
-        )
-        if logger:
-            logger.info(f"Fetched {len(spy_data)} intraday records up to current time")
-    else:
-        # For past dates, get data for the entire day.
-        spy_data = spy_ticker.history(
-            start=portfolio_date, end=target_datetime, interval="15m"
-        )
-        if logger:
-            logger.info(
-                f"Fetched {len(spy_data)} intraday records for {portfolio_date}"
-            )
-
+    # Get current price data.
+    spy_data = spy_ticker.history(
+        start=portfolio_date,
+        end=current_datetime if is_current_date else target_time,
+        interval="15m",
+    )
     if spy_data.empty:
-        if logger:
-            logger.error(f"No data available for SPY on {portfolio_date}.")
-        raise ValueError(f"No data available for SPY on {portfolio_date}.")
+        error_message = f"No data available for SPY on {portfolio_date}."
+        logger.error(error_message)
+        raise ValueError(error_message)
 
     current_price = spy_data["Close"].iloc[-1]
-    if logger:
-        logger.info(f"Current price: ${current_price:.2f}")
+    logger.info(f"Fetched {len(spy_data)} intraday records")
+    logger.info(
+        f"Current price: ${current_price:.2f} "
+        f"(from {spy_data.index[-1].strftime('%Y-%m-%d %H:%M')})"
+    )
 
-    # Get the prior day's close before the partition date.
-    # This is the price at the close of the day before the partition date.
+    # Get prior day's close.
     prior_record = spy_ticker.history(
-        start=datetime.strptime(portfolio_date, "%Y-%m-%d") - timedelta(days=10),
+        start=portfolio_datetime - timedelta(days=10),
         end=portfolio_date,
         interval="1d",
     ).iloc[-1]
-    prior_price = prior_record["Close"]
-    if logger:
-        logger.info(
-            f"Prior day close: ${prior_price:.2f} (from {prior_record.name.strftime('%Y-%m-%d')})"
-        )
+    logger.info(
+        f"Prior day close: ${prior_record['Close']:.2f} "
+        f"(from {prior_record.name.strftime('%Y-%m-%d')})"
+    )
 
-    # Calculate the return from prior close to current price.
-    price_return = current_price / prior_price - 1
-    if logger:
-        logger.info(f"Price return: {price_return:.2%}")
+    # Calculate return and determine position.
+    price_return = current_price / prior_record["Close"] - 1
+    logger.info(f"Price return: {price_return:.2%}")
+    position_weight = 1 if price_return > 0 else -1
+    logger.info(f"Position weight: {position_weight}")
 
-    # Determine position weight.
-    weight = 1 if price_return > 0 else -1
-    if logger:
-        logger.info(f"Position weight: {weight}")
+    # Create and return the position DataFrame.
+    position_df = pd.DataFrame({"sym": ["SPY"], "wt": [position_weight]})
+    logger.info(f"Generated portfolio:\n{position_df}")
 
-    # Create a DataFrame for the position.
-    df_portfolio = pd.DataFrame({"sym": ["SPY"], "wt": [weight]})
-    if logger:
-        logger.info(f"Generated portfolio:\n{df_portfolio}")
-
-    return df_portfolio
+    return position_df

@@ -7,7 +7,6 @@ import pprint
 from datetime import datetime
 
 import boto3
-import pandas as pd
 from dagster import DailyPartitionsDefinition, asset, build_op_context
 from dotenv import load_dotenv
 from vbase import (
@@ -62,6 +61,7 @@ def portfolio_asset(context):
         df_portfolio = produce_portfolio(partition_date, logger=context.log)
         context.log.info(f"{partition_date}: position_df = \n{df_portfolio}")
 
+        # pylint: disable=fixme
         # TODO: Saving should be idempotent within some time window.
         # TODO: Do not save if the portfolio is the same as the previous portfolio within a window.
         # Save the position to a CSV file in an S3 bucket.
@@ -101,16 +101,28 @@ def portfolio_asset(context):
 
     except ValueError as e:
         context.log.error(str(e))
-        return
+
+
+def debug_portfolio(date_str: str = None) -> None:
+    """
+    Materialize the portfolio asset for a specific date or today's date.
+
+    Args:
+        date_str: Optional date string in YYYY-MM-DD format. If None, uses today's date.
+    """
+    # Use provided date or today's date.
+    partition_date = date_str or datetime.now().strftime("%Y-%m-%d")
+
+    # Create a context for debugging.
+    context = build_op_context(partition_key=partition_date)
+
+    # Materialize the asset.
+    portfolio_asset(context)
 
 
 if __name__ == "__main__":
-    """Main entry point for debugging."""
+    # Run for today's date.
+    debug_portfolio()
 
-    # Create a context for debugging with today's partition and run the asset.
-    context = build_op_context(partition_key=datetime.now().strftime("%Y-%m-%d"))
-    portfolio_asset(context)
-
-    # Create a context for debugging with a past partition and run the asset.
-    context = build_op_context(partition_key="2025-04-04")
-    portfolio_asset(context)
+    # Run for a specific past date.
+    debug_portfolio("2025-04-04")

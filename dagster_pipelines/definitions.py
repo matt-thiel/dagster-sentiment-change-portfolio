@@ -1,3 +1,7 @@
+"""
+The definitions for the Dagster Cloud pipeline.
+"""
+
 from dagster import Definitions
 
 from dagster_pipelines.assets.portfolio_asset import portfolio_asset
