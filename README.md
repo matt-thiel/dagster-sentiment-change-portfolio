@@ -65,6 +65,19 @@ The portfolio producer is designed to be:
 - GitHub Actions automatically runs Pylint on all pushes and pull requests
 - Pre-commit hooks are configured to run code quality checks before commits
 
+## Background
+
+The following resources and examples can help you onboard to vBase, understand its architecture,
+and get ready for building more complex infrastructure like this Dagster portfolio asset:
+
+- **Onboard to vBase**: Create vBase accounts via our onboarding process. You would typically want two accounts -- one for testing and one for production. You can sign up for both accounts using https://app.vbase.com/accounts/signup/ and create `myusername-dev` and `myusername-prd` to make dev (sandbox) and eventually production stamps (commitments).
+
+- **Review Basic Samples**: Study our samples in https://github.com/validityBase/vbase-py-samples/tree/main/samples, such as https://github.com/validityBase/vbase-py-samples/blob/main/samples/add_string_dataset_record.py and https://github.com/validityBase/vbase-py-samples/blob/main/samples/add_string_dataset_record_idempotent.py for stamping and verifying simple strings. These strings will be CSVs in the case of a portfolio asset. You should be able to run these with your `-dev` account for testing.
+
+- **Explore Complex Examples**: Review and understand more complex examples like https://github.com/validityBase/vbase-py-samples/blob/main/samples/produce_portfolio_history_csv_s3.py and https://github.com/validityBase/vbase-py-samples/blob/main/samples/verify_portfolio_history_csv_s3.py. You can run and modify these to write and validate local files instead of S3 objects.
+
+- **Learn Dagster**: Study Dagster (https://dagster.io/). An investment strategy can be implemented as a Dagster pipeline with a single asset that is produced (materialized) daily to read financial data, save the portfolio data, and stamp it. This pipeline is a more complex version of this sample: https://docs.dagster.io/getting-started/quickstart. For development, you can work through various Dagster demos using `dagster dev` as described here: https://docs.dagster.io/guides/deploy/deployment-options/running-dagster-locally.
+
 ## License
 
 This project is licensed under the Apache 2.0 License - see the [LICENSE.txt](LICENSE.txt) file for details.
