@@ -104,6 +104,7 @@ def portfolio_asset(
             tickers=ishares_etf_holdings,
             logger=context.log,
             portfolio_date=partition_date,
+            update_existing=True,
         )
         # Produce the portfolio for the partition date.
         df_portfolio = produce_portfolio(

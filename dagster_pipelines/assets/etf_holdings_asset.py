@@ -32,4 +32,4 @@ def ishares_etf_holdings_asset(context: AssetExecutionContext) -> list[str]:
         logger.error(f"Error creating library, check that S3 bucket exists: {e}")
         raise e
 
-    return holdings[:10]
+    return holdings

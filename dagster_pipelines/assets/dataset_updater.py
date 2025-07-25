@@ -147,6 +147,8 @@ def update_sentiment_data(
     tickers_to_download = missing_tickers + tickers_with_nan
 
     if tickers_to_download:
+        logger.warning("Tickers missing from sentiment data: %s", missing_tickers)
+        logger.warning("Tickers with missing values: %s", tickers_with_nan)
         logger.warning(
             "Some tickers are not in the sentiment data or contain missing values. Downloading..."
         )
@@ -193,14 +195,20 @@ def update_sentiment_data(
     # TODO: Instead of overwriting existing data, use .update() to add new data
     if updated_sentiment_df is not None:
         for symbol in base_dataset_symbols:
-            _update_base_dataset_symbol(arctic_library, symbol, updated_sentiment_df, current_datetime)
+            _update_base_dataset_symbol(arctic_library,
+                                        symbol,
+                                        updated_sentiment_df,
+                                        current_datetime,
+                                        )
         # TODO: Only update change dataset with necessary updates, don't recalc on entire dataset
         for symbol in feature_dataset_symbols:
-            _update_feature_dataset_symbol(arctic_library, symbol, updated_sentiment_df, current_datetime)
+            _update_feature_dataset_symbol(arctic_library,
+                                           symbol,
+                                           updated_sentiment_df,
+                                           current_datetime,
+                                        )
     else:
         logger.info("Data is available for %s.", portfolio_datetime)
-
-    logger.info(arctic_library.list_symbols())
 
     # Check datase fragmentation
     for symbol in base_dataset_symbols + feature_dataset_symbols:

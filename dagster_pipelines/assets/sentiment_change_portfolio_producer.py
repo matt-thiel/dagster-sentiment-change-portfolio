@@ -104,7 +104,7 @@ def produce_portfolio(
         df_feature = todays_sentiment.rank(method="first")
         feature_dfs[feature_name] = (
             pd.qcut(df_feature, 10, labels=False, duplicates="raise") + 1
-        ).astype(int)
+        )
 
     for ticker in tickers:
         long_mask = []
