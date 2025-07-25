@@ -33,8 +33,7 @@ def _update_base_dataset_symbol(
     updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
     existing_symbol = arctic_library.read(symbol)
     existing_dataset = existing_symbol.data
-    updated_dataset = pd.concat([existing_dataset, updated_dataset])
-    updated_dataset = updated_dataset[~updated_dataset.index.duplicated(keep="last")]
+    updated_dataset = updated_dataset.combine_first(existing_dataset)
     updated_dataset = updated_dataset.sort_index()
     arctic_library.write(
         symbol,
@@ -71,8 +70,7 @@ def _update_feature_dataset_symbol(
         dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
         existing_symbol = arctic_library.read(symbol)
         existing_dataset = existing_symbol.data
-        updated_dataset = pd.concat([existing_dataset, dataset])
-        updated_dataset = updated_dataset[~updated_dataset.index.duplicated(keep="last")]
+        updated_dataset = dataset.combine_first(existing_dataset)
         updated_dataset = updated_dataset.sort_index()
         arctic_library.write(
             symbol,
@@ -111,6 +109,7 @@ def update_sentiment_data(
     """
     base_dataset_symbols = ["sentimentNormalized", "messageVolumeNormalized"]
     feature_dataset_symbols = ["sentimentNormalized_1d_change_1d_lag"]
+    feature_lookback_window = 2 # Extra days of data needed to get feature value for today
     portfolio_datetime = datetime.strptime(portfolio_date, "%Y-%m-%d")
     portfolio_datetime = ensure_timezone(portfolio_datetime, EASTERN_TZ)
     current_datetime = datetime.now(EASTERN_TZ)
@@ -176,7 +175,7 @@ def update_sentiment_data(
     if portfolio_datetime > last_available_date:
         logger.warning("No exisiting sentiment data for %s.", portfolio_datetime)
         timedelta_to_last = (current_datetime.date() - last_available_date).days
-        zoom_param = select_zoom(timedelta_to_last)
+        zoom_param = select_zoom(timedelta_to_last + feature_lookback_window)
         if update_existing:
             update_tickers = tickers + df_sentiment.columns
         else:
@@ -192,7 +191,6 @@ def update_sentiment_data(
     else:
         logger.info("Using exisiting sentiment data for %s.", portfolio_datetime)
 
-    # TODO: Instead of overwriting existing data, use .update() to add new data
     if updated_sentiment_df is not None:
         for symbol in base_dataset_symbols:
             _update_base_dataset_symbol(arctic_library,
@@ -200,7 +198,7 @@ def update_sentiment_data(
                                         updated_sentiment_df,
                                         current_datetime,
                                         )
-        # TODO: Only update change dataset with necessary updates, don't recalc on entire dataset
+
         for symbol in feature_dataset_symbols:
             _update_feature_dataset_symbol(arctic_library,
                                            symbol,

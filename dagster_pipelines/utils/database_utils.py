@@ -109,3 +109,15 @@ def print_arcticdb_summary(store: object, logger: object) -> None:
                     )
     except ArcticNativeException as exc:
         logger.error("Error summarizing ArcticDB: %s", exc)
+
+def print_arcticdb_symbol(symbol: str, library: str, arctic_object: object, logger: object) -> None:
+    """
+    Print the dataframe info for a given symbol in ArcticDB.
+    """
+    try:
+        symbol_data = arctic_object[library].read(symbol)
+        logger.info("Symbol dataframe info: %s", symbol_data.data.info())
+        logger.info("Symbol dataframe head: %s", symbol_data.data.head())
+        logger.info("Symbol dataframe tail: %s", symbol_data.data.tail())
+    except ArcticNativeException as exc:
+        logger.error("Error reading symbol '%s': %s", symbol, exc)

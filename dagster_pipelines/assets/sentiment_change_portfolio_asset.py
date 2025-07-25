@@ -32,7 +32,7 @@ from vbase import (
     VBaseStringObject,
 )
 
-from dagster_pipelines.utils.database_utils import print_arcticdb_summary
+from dagster_pipelines.utils.database_utils import print_arcticdb_summary, print_arcticdb_symbol
 from dagster_pipelines.config.constants import EASTERN_TZ, VBASE_FORWARDER_URL, PORTFOLIO_NAME
 from dagster_pipelines.assets.sentiment_change_portfolio_producer import (
     produce_portfolio,
@@ -124,6 +124,7 @@ def portfolio_asset(
         # and folder specified in the environment variables.
         # Create the filename using a format: portfolio--2024-12-11_07-58-46.csv
         # recognized by vBase validation tools and the current timestamp.
+        
         bucket = os.environ["S3_BUCKET"]
         folder = os.environ["S3_FOLDER"]
         current_time = datetime.now(EASTERN_TZ)
@@ -155,8 +156,11 @@ def portfolio_asset(
         receipt = ds.add_record("body")
         context.log.info(f"ds.add_record() receipt:\n{pprint.pformat(receipt)}")
 
+    
     except ValueError as e:
         context.log.error(str(e))
+
+    
 
 
 def debug_portfolio(date_str: str | None = None) -> None:
@@ -194,6 +198,14 @@ def debug_portfolio(date_str: str | None = None) -> None:
     )
 
     print_arcticdb_summary(arctic_db, context.log)
+    print_arcticdb_symbol(symbol="sentimentNormalized", 
+                          library="sentiment_features", 
+                          arctic_object=arctic_db, 
+                          logger=context.log)
+    print_arcticdb_symbol(symbol="sentimentNormalized_1d_change_1d_lag", 
+                          library="sentiment_features", 
+                          arctic_object=arctic_db, 
+                          logger=context.log)
 
 
 if __name__ == "__main__":
