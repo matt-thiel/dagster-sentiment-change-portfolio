@@ -1,8 +1,13 @@
+"""
+Fetches and stores the holdings for a specified iShares ETF in ArcticDB.
+"""
+
 from dagster import asset
 from dagster_pipelines.utils.ticker_utils import get_ishares_etf_tickers
 
+
 @asset(required_resource_keys={"arctic_db", "s3"})
-def ishares_etf_holdings_asset(context) -> list[str]:
+def ishares_etf_holdings_asset(context: object) -> list[str]:
     """
     Fetches and stores the holdings for a specified iShares ETF in ArcticDB.
 

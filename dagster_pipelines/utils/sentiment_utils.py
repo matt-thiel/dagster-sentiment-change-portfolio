@@ -15,13 +15,15 @@ STOCKTWITS_ENDPOINT = (
     "https://api-gw-prd.stocktwits.com/api-middleware/external/sentiment/v2/"
 )
 
+# Disable too many arguments due to arguments necessary for api call
+# pylint: disable=too-many-arguments
 def get_symbol_chart(
-    symbol: str, 
-    zoom: str, 
+    symbol: str,
+    zoom: str,
     username: str,
     password: str,
     logger: object,
-    timeout: int = 10
+    timeout: int = 10,
 ) -> pd.DataFrame:
     """
     Fetches sentiment chart data for a given stock symbol from StockTwits API.
@@ -77,10 +79,14 @@ def get_symbol_chart(
 
     response_df = pd.DataFrame.from_dict(result["data"], orient="index")
 
-    response_df.index = pd.to_datetime(response_df.index, utc=True).tz_convert("America/New_York")
+    response_df.index = pd.to_datetime(response_df.index, utc=True).tz_convert(
+        "America/New_York"
+    )
 
     return response_df
 
+# Disable too many arguments due to arguments necessary for api call
+# pylint: disable=too-many-arguments
 def get_chart_for_symbols(
     symbols: list[str],
     zoom: str,
@@ -126,14 +132,13 @@ def get_chart_for_symbols(
                 username=username,
                 password=password,
                 logger=logger,
-                timeout=timeout
+                timeout=timeout,
             )
             df = df.drop(columns=["dateTime"])
             dfs[symbol] = df
         except (HTTPError, JSONDecodeError, ConnectionError, Timeout, ValueError) as e:
             logger.error("Error fetching data for %s: %s", symbol, e)
             continue
-        #time.sleep(0.2)
         time.sleep(0.1)
 
     if not dfs:
@@ -150,6 +155,7 @@ def get_chart_for_symbols(
     dfs.clear()
 
     return combined_df
+
 
 def select_zoom(days_to_query: int) -> str:
     """

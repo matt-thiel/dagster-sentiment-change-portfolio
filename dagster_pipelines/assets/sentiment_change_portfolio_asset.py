@@ -16,7 +16,13 @@ import pprint
 from datetime import datetime
 from arcticdb.version_store.library import Library
 
-from dagster import DailyPartitionsDefinition, asset, build_op_context, resource, AssetIn, build_init_resource_context
+from dagster import (
+    DailyPartitionsDefinition,
+    asset,
+    build_op_context,
+    AssetIn,
+    build_init_resource_context,
+)
 from dotenv import load_dotenv
 from vbase import (
     ForwarderCommitmentService,
@@ -26,34 +32,39 @@ from vbase import (
 )
 
 from dagster_pipelines.utils.database_utils import print_arcticdb_summary
-from dagster_pipelines.config.constants import EASTERN_TZ
-from dagster_pipelines.assets.sentiment_change_portfolio_producer import produce_portfolio
+from dagster_pipelines.config.constants import EASTERN_TZ, VBASE_FORWARDER_URL, PORTFOLIO_NAME
+from dagster_pipelines.assets.sentiment_change_portfolio_producer import (
+    produce_portfolio,
+)
 from dagster_pipelines.resources import s3_resource, arctic_db_resource
 from dagster_pipelines.assets.etf_holdings_asset import ishares_etf_holdings_asset
 from dagster_pipelines.assets.sentiment_dataset_asset import sentiment_dataset_asset
 from dagster_pipelines.assets.dataset_updater import update_sentiment_data
 
-# The name of the portfolio set (collection).
-# This is the vBase set (collection) that receive the object commitments (stamps)
-# for the individual portfolios.
-PORTFOLIO_NAME = "TestPortfolio"
 
 # Define a daily partition for portfolio rebalancing.
 # The portfolio rebalances daily starting from 2025-01-01.
 partitions_def = DailyPartitionsDefinition(start_date="2025-01-01")
 
-# The vBase forwarder URL for making commitments via the vBase forwarder.
-VBASE_FORWARDER_URL = "https://dev.api.vbase.com/forwarder-test/"
 
 
-@asset(partitions_def=partitions_def,
-       ins={"ishares_etf_holdings": AssetIn("ishares_etf_holdings"),
-            "sentiment_library": AssetIn("sentiment_dataset")},
-       #deps=["sentiment_dataset_asset"],
-       required_resource_keys={"arctic_db", "s3"})
-def portfolio_asset(context, ishares_etf_holdings: list, sentiment_library: Library):
+# pylint: disable=too-many-locals
+@asset(
+    partitions_def=partitions_def,
+    ins={
+        "ishares_etf_holdings": AssetIn("ishares_etf_holdings"),
+        "sentiment_library": AssetIn("sentiment_dataset"),
+    },
+    required_resource_keys={"arctic_db", "s3"},
+)
+def portfolio_asset(
+    context: object,
+    ishares_etf_holdings: list,
+    sentiment_library: Library,
+) -> None:
     """
-    Generates and saves a portfolio for the SPY ETF for a given partition date, stamps it in vBase, and uploads to S3.
+    Generates and saves a portfolio for the SPY ETF for a given partition date, 
+      stamps it in vBase, and uploads to S3.
 
     Args:
         context: Dagster asset context with partition key and resources.
@@ -87,11 +98,21 @@ def portfolio_asset(context, ishares_etf_holdings: list, sentiment_library: Libr
     context.log.info("Starting portfolio generation for %s", partition_date)
 
     try:
-        update_sentiment_data(sentiment_library, tickers=ishares_etf_holdings, logger=context.log, portfolio_date=partition_date)
+        update_sentiment_data(
+            sentiment_library,
+            tickers=ishares_etf_holdings,
+            logger=context.log,
+            portfolio_date=partition_date,
+        )
         # Produce the portfolio for the partition date.
-        df_portfolio = produce_portfolio(partition_date, arctic_library=sentiment_library, tickers=ishares_etf_holdings, logger=context.log)
+        df_portfolio = produce_portfolio(
+            partition_date,
+            arctic_library=sentiment_library,
+            tickers=ishares_etf_holdings,
+            logger=context.log,
+        )
         context.log.info(f"{partition_date}: position_df = \n{df_portfolio}")
-        #return
+        # return
 
         # pylint: disable=fixme
         # TODO: Saving should be idempotent within some time window.
@@ -136,7 +157,7 @@ def portfolio_asset(context, ishares_etf_holdings: list, sentiment_library: Libr
         context.log.error(str(e))
 
 
-def debug_portfolio(date_str: str = None) -> None:
+def debug_portfolio(date_str: str | None = None) -> None:
     """
     Materializes the portfolio asset for a specific date or today's date.
 
@@ -150,21 +171,28 @@ def debug_portfolio(date_str: str = None) -> None:
     s3 = s3_resource(build_init_resource_context())
 
     # Instantiate arctic_db resource, passing s3 as a required resource
-    arctic_db = arctic_db_resource(
-        build_init_resource_context(resources={"s3": s3})
-    )
+    arctic_db = arctic_db_resource(build_init_resource_context(resources={"s3": s3}))
 
     # Create a context for debugging.
-    context = build_op_context(partition_key=partition_date, resources={"s3": s3, "arctic_db": arctic_db})
+    context = build_op_context(
+        partition_key=partition_date, resources={"s3": s3, "arctic_db": arctic_db}
+    )
 
     # Get the holdings (call the asset function directly)
     ishares_etf_holdings = ishares_etf_holdings_asset(context)
-    sentiment_library = sentiment_dataset_asset(context, ishares_etf_holdings=ishares_etf_holdings)
+    sentiment_library = sentiment_dataset_asset(
+        context, ishares_etf_holdings=ishares_etf_holdings
+    )
 
     # Materialize the portfolio asset, passing the holdings
-    portfolio_asset(context, ishares_etf_holdings=ishares_etf_holdings, sentiment_library=sentiment_library)
+    portfolio_asset(
+        context,
+        ishares_etf_holdings=ishares_etf_holdings,
+        sentiment_library=sentiment_library,
+    )
 
     print_arcticdb_summary(arctic_db, context.log)
+
 
 if __name__ == "__main__":
     # Run for today's date.

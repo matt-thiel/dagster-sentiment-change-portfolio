@@ -1,5 +1,9 @@
+"""
+Datetime utilities for timezone handling and conversions.
+"""
 from datetime import datetime
 import pytz
+
 
 def ensure_timezone(dt: datetime, timezone: pytz.timezone) -> datetime:
     """
@@ -15,9 +19,8 @@ def ensure_timezone(dt: datetime, timezone: pytz.timezone) -> datetime:
     if dt.tzinfo is None:
         # If the datetime is naive, localize it to the specified timezone
         return timezone.localize(dt)
-    elif dt.tzinfo != timezone:
+    if dt.tzinfo != timezone:
         # If the datetime is aware but not in the specified timezone, convert it
         return dt.astimezone(timezone)
-    else:
-        # Already in the specified timezone
-        return dt
+    # Already in the specified timezone
+    return dt

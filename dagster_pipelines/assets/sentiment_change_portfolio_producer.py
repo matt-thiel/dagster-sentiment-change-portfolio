@@ -15,9 +15,16 @@ import numpy as np
 from dagster_pipelines.utils.datetime_utils import ensure_timezone
 from dagster_pipelines.config.constants import EASTERN_TZ
 
-def produce_portfolio(portfolio_date: str, arctic_library: object, tickers: list, logger: object) -> pd.DataFrame:
+
+# Disable too many locals due to function complexity
+# pylint: disable=too-many-locals
+
+def produce_portfolio(
+    portfolio_date: str, arctic_library: object, tickers: list, logger: object
+) -> pd.DataFrame:
     """
-    Produces a sentiment-based portfolio with long/short positions based on sentiment change features.
+    Produces a sentiment-based portfolio with long/short positions 
+      based on sentiment change features.
 
     This function implements a market-neutral strategy that:
     1. Loads sentiment change data from ArcticDB
@@ -40,7 +47,7 @@ def produce_portfolio(portfolio_date: str, arctic_library: object, tickers: list
         ValueError: If the portfolio date is not a trading day, if current time is before
                    target time (10 minutes before market close), or if required data is unavailable.
     """
-    
+
     # Get the NYSE schedule for the portfolio date.
     schedule = mcal.get_calendar("NYSE").schedule(
         start_date=portfolio_date, end_date=portfolio_date
@@ -62,22 +69,23 @@ def produce_portfolio(portfolio_date: str, arctic_library: object, tickers: list
     portfolio_datetime = ensure_timezone(portfolio_datetime, EASTERN_TZ)
     current_datetime = datetime.now(EASTERN_TZ)
     is_current_date = portfolio_datetime.date() == current_datetime.date()
-    logger.info(f"Current time (Eastern): {current_datetime.strftime('%Y-%m-%d %H:%M %Z')}")
+    logger.info(
+        f"Current time (Eastern): {current_datetime.strftime('%Y-%m-%d %H:%M %Z')}"
+    )
     logger.info(f"Is current date: {is_current_date}")
 
-    if is_current_date and current_datetime < ensure_timezone(datetime.combine(
-        portfolio_datetime.date(), target_time.time()), EASTERN_TZ):
+    if is_current_date and current_datetime < ensure_timezone(
+        datetime.combine(portfolio_datetime.date(), target_time.time()), EASTERN_TZ
+    ):
         error_message = (
             f"Current time is before target time ({target_time.strftime('%H:%M')})."
         )
         logger.error(error_message)
         raise ValueError(error_message)
 
-    # start my implementation
-    #load dataset
+
     selected_features = [
         "sentimentNormalized_1d_change_1d_lag",
-        #"messageVolumeNormalized_1d_change_1d_lag",
     ]
 
     feature_dfs = {}
@@ -86,28 +94,21 @@ def produce_portfolio(portfolio_date: str, arctic_library: object, tickers: list
     for feature_name in selected_features:
         df_sentiment = arctic_library.read(feature_name).data
         df_sentiment = df_sentiment.loc[:, df_sentiment.columns.isin(tickers)]
-    
-        #df_sentiment = df_sentiment.sort_index()
-        #if USE_NEAREST_DATE:
+
         closest_date = df_sentiment.index.asof(portfolio_datetime)
         todays_sentiment = df_sentiment.loc[closest_date]
-        #else:
-        #    todays_sentiment = df_sentiment.loc[portfolio_datetime.date()]
-        #    if len(todays_sentiment) >1:
-        #        logger.warning("Multiple sentiment values for %s. Using the last one.", portfolio_datetime)
-    #         todays_sentiment = todays_sentiment.iloc[-1]
 
-            #df_feature_today = df_feature.iloc[-1].rank(method="first")
-        df_feature = todays_sentiment.rank(method='first')
-        feature_dfs[feature_name] = (pd.qcut(df_feature, 10, labels=False, duplicates='raise') + 1).astype(int)
-           
+        df_feature = todays_sentiment.rank(method="first")
+        feature_dfs[feature_name] = (
+            pd.qcut(df_feature, 10, labels=False, duplicates="raise") + 1
+        ).astype(int)
 
     for ticker in tickers:
         long_mask = []
         short_mask = []
-        for feature in feature_dfs.keys():
-            long_mask.append(feature_dfs[feature].loc[ticker] == 10)
-            short_mask.append(feature_dfs[feature].loc[ticker] == 1)
+        for _, feature_df in feature_dfs.items():
+            long_mask.append(feature_df.loc[ticker] == 10)
+            short_mask.append(feature_df.loc[ticker] == 1)
         if all(long_mask):
             signals.append((ticker, 1))
         elif all(short_mask):
@@ -116,20 +117,24 @@ def produce_portfolio(portfolio_date: str, arctic_library: object, tickers: list
             signals.append((ticker, np.nan))
 
     # equal weight the signals
-    position_df = pd.DataFrame(signals, columns=['sym', 'wt'])
-    
+    position_df = pd.DataFrame(signals, columns=["sym", "wt"])
+
     # Count valid positions
-    long_positions = position_df['wt'] == 1
-    short_positions = position_df['wt'] == -1
-    
+    long_positions = position_df["wt"] == 1
+    short_positions = position_df["wt"] == -1
+
     # Equal weight Market-neutral: 1/number_of_positions for each direction
     if long_positions.sum() > 0:
-        position_df.loc[long_positions, 'wt'] = 1.0 / long_positions.sum()
-    
+        position_df.loc[long_positions, "wt"] = (
+            1.0 / long_positions.sum()
+        )
+
     if short_positions.sum() > 0:
-        position_df.loc[short_positions, 'wt'] = -1.0 / short_positions.sum()
-    
+        position_df.loc[short_positions, "wt"] = (
+            -1.0 / short_positions.sum()
+        )
+
     # Set NaN (no position) to 0
-    position_df['wt'] = position_df['wt'].fillna(0)
+    position_df["wt"] = position_df["wt"].fillna(0)
 
     return position_df

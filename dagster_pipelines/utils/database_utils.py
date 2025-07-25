@@ -5,7 +5,15 @@ This module provides utility functions for database maintenance tasks such as
 fragmentation checking and defragmentation of ArcticDB symbols.
 """
 
-def check_db_fragmentation(db_symbol: str, db_lib: object, logger: object, frag_threshold: int | None = None) -> None:
+from arcticdb.exceptions import ArcticNativeException
+
+
+def check_db_fragmentation(
+    db_symbol: str,
+    db_lib: object,
+    logger: object,
+    frag_threshold: int | None = None,
+) -> None:
     """
     Checks if an ArcticDB symbol is fragmented and defragments if necessary.
 
@@ -28,14 +36,26 @@ def check_db_fragmentation(db_symbol: str, db_lib: object, logger: object, frag_
     """
     try:
         if db_lib.is_symbol_fragmented(db_symbol, segment_size=frag_threshold):
-            logger.warning(f"Segment count for symbol '{db_symbol}' is above threshold, defragmenting...")
+            logger.warning(
+                "Segment count for symbol '%s' is above threshold, defragmenting...",
+                db_symbol,
+            )
             db_lib.defragment_symbol(db_symbol)
         else:
-            logger.info(f"Segment count for symbol '{db_symbol}' is below threshold, no defragmentation required.")
-    except Exception as e:
-        logger.error(f"Error checking database fragmentation for symbol '{db_symbol}': {e}")
+            logger.info(
+                "Segment count for symbol '%s' is below threshold, no defragmentation required.",
+                db_symbol,
+            )
+    except ArcticNativeException as e:
+        logger.error(
+            "Error checking database fragmentation for symbol '%s': %s",
+            db_symbol,
+            e,
+        )
 
-def print_arcticdb_summary(store, logger):
+# Debugging info function requires a lot of locals and branches
+# pylint: disable=too-many-locals, too-many-branches, too-many-nested-blocks
+def print_arcticdb_summary(store: object, logger: object) -> None:
     """
     Print a summary of the ArcticDB database structure, including libraries, symbols,
     shape of each symbol (rows/columns), and storage size if available.
@@ -52,30 +72,25 @@ def print_arcticdb_summary(store, logger):
         logger.info("ArcticDB Libraries: %s", libraries)
         logger.info("ArcticDB Structure:")
         for lib_name in libraries:
-            #logger.info("Library: %s", lib_name)
             lib = store[lib_name]
             symbols = lib.list_symbols()
             if not symbols:
+                logger.info("Library: %s", lib_name)
                 logger.info("  (No symbols)")
+                continue
             for symbol in symbols:
                 logger.info("Library: %s", lib_name)
                 logger.info("  └─ Symbol: %s", symbol)
                 try:
-                    item = lib.read(symbol)
-                    data = item.data
-                    metadata = item.metadata
-                    shape = getattr(data, 'shape', None)
-                    if shape:
-                        logger.info(
-                            "      Shape: %s rows x %s cols", shape[0], shape[1]
-                        )
-                    else:
-                        logger.info("      Data type: %s", type(data))
+                    metadata = lib.read_metadata(symbol)
                     # Print symbol description details (do not print storage size)
                     desc = lib.get_description(symbol)
                     logger.info("      Column Count: %s", len(desc.columns))
                     logger.info("      Row count: %s", desc.row_count)
-                    logger.info("      Last update time (UTC): %s", desc.last_update_time)
+                    logger.info(
+                        "      Last update time (UTC): %s",
+                        desc.last_update_time,
+                    )
                     if metadata:
                         logger.info("      Metadata:")
                         for k, v in metadata.items():
@@ -88,7 +103,9 @@ def print_arcticdb_summary(store, logger):
                         logger.info("      │   Date (UTC): %s", vinfo.date)
                         logger.info("      │   Deleted: %s", vinfo.deleted)
                         logger.info("      │   Snapshots: %s", vinfo.snapshots)
-                except Exception as symbol_exc:
-                    logger.warning("    Could not read symbol '%s': %s", symbol, symbol_exc)
-    except Exception as exc:
+                except ArcticNativeException as symbol_exc:
+                    logger.warning(
+                        "    Could not read symbol '%s': %s", symbol, symbol_exc
+                    )
+    except ArcticNativeException as exc:
         logger.error("Error summarizing ArcticDB: %s", exc)
