@@ -15,6 +15,78 @@ from dagster_pipelines.config.constants import EASTERN_TZ
 # Disable too many locals/branches/statements due to function complexity
 # pylint: disable=too-many-locals, too-many-branches, too-many-statements
 
+def _update_base_dataset_symbol(
+    arctic_library: object,
+    symbol: str,
+    updated_sentiment_df: pd.DataFrame,
+    current_datetime: datetime
+) -> None:
+    """
+    Update a base dataset symbol in ArcticDB with new data.
+
+    Args:
+        arctic_library (object): ArcticDB library instance.
+        symbol (str): The symbol to update.
+        updated_sentiment_df (pd.DataFrame): DataFrame containing updated sentiment data.
+        current_datetime (datetime): The current datetime for metadata.
+    """
+    updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
+    existing_symbol = arctic_library.read(symbol)
+    existing_dataset = existing_symbol.data
+    updated_dataset = pd.concat([existing_dataset, updated_dataset])
+    updated_dataset = updated_dataset[~updated_dataset.index.duplicated(keep="last")]
+    updated_dataset = updated_dataset.sort_index()
+    arctic_library.write(
+        symbol,
+        updated_dataset,
+        metadata={
+            "date_created": existing_symbol.metadata["date_created"],
+            "date_updated": current_datetime.isoformat(),
+            "data_start_date": updated_dataset.index.min(),
+            "data_end_date": updated_dataset.index.max(),
+            "source": "StockTwits",
+            "last_dagster_run_id": existing_symbol.metadata["last_dagster_run_id"],
+        },
+    )
+
+def _update_feature_dataset_symbol(
+    arctic_library: object,
+    symbol: str,
+    updated_sentiment_df: pd.DataFrame,
+    current_datetime: datetime
+) -> None:
+    """
+    Update a feature dataset symbol in ArcticDB with new data.
+
+    Args:
+        arctic_library (object): ArcticDB library instance.
+        symbol (str): The feature symbol to update.
+        updated_sentiment_df (pd.DataFrame): DataFrame containing updated sentiment data.
+        current_datetime (datetime): The current datetime for metadata.
+    """
+    if symbol == "sentimentNormalized_1d_change_1d_lag":
+        base_symbol = symbol.split("_1d_change_1d_lag", maxsplit=1)[0]
+        dataset = updated_sentiment_df.xs(base_symbol, axis=1, level=1)
+        dataset = dataset.pct_change(periods=1, fill_method=None).shift(1)
+        dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
+        existing_symbol = arctic_library.read(symbol)
+        existing_dataset = existing_symbol.data
+        updated_dataset = pd.concat([existing_dataset, dataset])
+        updated_dataset = updated_dataset[~updated_dataset.index.duplicated(keep="last")]
+        updated_dataset = updated_dataset.sort_index()
+        arctic_library.write(
+            symbol,
+            updated_dataset,
+            metadata={
+                "date_created": existing_symbol.metadata["date_created"],
+                "date_updated": current_datetime.isoformat(),
+                "data_start_date": updated_dataset.index.min(),
+                "data_end_date": updated_dataset.index.max(),
+                "source": "StockTwits",
+                "last_dagster_run_id": existing_symbol.metadata["last_dagster_run_id"],
+            },
+        )
+
 def update_sentiment_data(
     arctic_library: object,
     tickers: list,
@@ -87,57 +159,11 @@ def update_sentiment_data(
             logger=logger,
         ).select_dtypes(include=["float64", "int64"])
         for symbol in base_dataset_symbols:
-            updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
-            existing_symbol = arctic_library.read(symbol)
-            existing_dataset = existing_symbol.data
-            updated_dataset = pd.concat([existing_dataset, updated_dataset])
-            updated_dataset = updated_dataset[
-                ~updated_dataset.index.duplicated(keep="last")
-            ]
-            updated_dataset = updated_dataset.sort_index()
-            arctic_library.write(
-                symbol,
-                updated_dataset,
-                metadata={
-                    "date_created": existing_symbol.metadata["date_created"],
-                    "date_updated": current_datetime.isoformat(),
-                    "data_start_date": updated_dataset.index.min(),
-                    "data_end_date": updated_dataset.index.max(),
-                    "source": "StockTwits",
-                    "last_dagster_run_id": existing_symbol.metadata[
-                        "last_dagster_run_id"
-                    ],
-                },
-            )
+            _update_base_dataset_symbol(arctic_library, symbol, updated_sentiment_df, current_datetime)
 
         for symbol in feature_dataset_symbols:
-            if symbol == "sentimentNormalized_1d_change_1d_lag":
-                base_symbol = symbol.split("_1d_change_1d_lag", maxsplit=1)[0]
-                dataset = updated_sentiment_df.xs(base_symbol, axis=1, level=1)
-                dataset = dataset.pct_change(periods=1, fill_method=None).shift(1)
-                dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
-                existing_symbol = arctic_library.read(symbol)
-                existing_dataset = existing_symbol.data
-                updated_dataset = pd.concat([existing_dataset, updated_dataset])
-                updated_dataset = updated_dataset[
-                    ~updated_dataset.index.duplicated(keep="last")
-                ]
-                updated_dataset = updated_dataset.sort_index()
-                arctic_library.write(
-                    symbol,
-                    updated_dataset,
-                    metadata={
-                        "date_created": existing_symbol.metadata["date_created"],
-                        "date_updated": current_datetime.isoformat(),
-                        "data_start_date": updated_dataset.index.min(),
-                        "data_end_date": updated_dataset.index.max(),
-                        "source": "StockTwits",
-                        "last_dagster_run_id": existing_symbol.metadata[
-                            "last_dagster_run_id"
-                        ],
-                    },
-                )
-        updated_dataset = None
+            _update_feature_dataset_symbol(arctic_library, symbol, updated_sentiment_df, current_datetime)
+
 
     updated_sentiment_df = None
 
@@ -167,56 +193,10 @@ def update_sentiment_data(
     # TODO: Instead of overwriting existing data, use .update() to add new data
     if updated_sentiment_df is not None:
         for symbol in base_dataset_symbols:
-            updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
-            existing_symbol = arctic_library.read(symbol)
-            existing_dataset = existing_symbol.data
-            updated_dataset = pd.concat([existing_dataset, updated_dataset])
-            updated_dataset = updated_dataset[
-                ~updated_dataset.index.duplicated(keep="last")
-            ]
-            updated_dataset = updated_dataset.sort_index()
-            arctic_library.write(
-                symbol,
-                updated_dataset,
-                metadata={
-                    "date_created": existing_symbol.metadata["date_created"],
-                    "date_updated": current_datetime.isoformat(),
-                    "data_start_date": updated_dataset.index.min(),
-                    "data_end_date": updated_dataset.index.max(),
-                    "source": "StockTwits",
-                    "last_dagster_run_id": existing_symbol.metadata[
-                        "last_dagster_run_id"
-                    ],
-                },
-            )
+            _update_base_dataset_symbol(arctic_library, symbol, updated_sentiment_df, current_datetime)
         # TODO: Only update change dataset with necessary updates, don't recalc on entire dataset
         for symbol in feature_dataset_symbols:
-            if symbol == "sentimentNormalized_1d_change_1d_lag":
-                base_symbol = symbol.split("_1d_change_1d_lag", maxsplit=1)[0]
-                dataset = updated_sentiment_df.xs(base_symbol, axis=1, level=1)
-                dataset = dataset.pct_change(periods=1, fill_method=None).shift(1)
-                dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
-                existing_symbol = arctic_library.read(symbol)
-                existing_dataset = existing_symbol.data
-                updated_dataset = pd.concat([existing_dataset, updated_dataset])
-                updated_dataset = updated_dataset[
-                    ~updated_dataset.index.duplicated(keep="last")
-                ]
-                updated_dataset = updated_dataset.sort_index()
-                arctic_library.write(
-                    symbol,
-                    updated_dataset,
-                    metadata={
-                        "date_created": existing_symbol.metadata["date_created"],
-                        "date_updated": current_datetime.isoformat(),
-                        "data_start_date": updated_dataset.index.min(),
-                        "data_end_date": updated_dataset.index.max(),
-                        "source": "StockTwits",
-                        "last_dagster_run_id": existing_symbol.metadata[
-                            "last_dagster_run_id"
-                        ],
-                    },
-                )
+            _update_feature_dataset_symbol(arctic_library, symbol, updated_sentiment_df, current_datetime)
     else:
         logger.info("Data is available for %s.", portfolio_datetime)
 

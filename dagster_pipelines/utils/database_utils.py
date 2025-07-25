@@ -43,7 +43,7 @@ def check_db_fragmentation(
             db_lib.defragment_symbol(db_symbol)
         else:
             logger.info(
-                "Segment count for symbol '%s' is below threshold, no defragmentation required.",
+                "No defragmentation required for symbol '%s'.",
                 db_symbol,
             )
     except ArcticNativeException as e:
@@ -82,7 +82,7 @@ def print_arcticdb_summary(store: object, logger: object) -> None:
                 logger.info("Library: %s", lib_name)
                 logger.info("  └─ Symbol: %s", symbol)
                 try:
-                    metadata = lib.read_metadata(symbol)
+                    metadata = lib.read_metadata(symbol).metadata
                     # Print symbol description details (do not print storage size)
                     desc = lib.get_description(symbol)
                     logger.info("      Column Count: %s", len(desc.columns))
