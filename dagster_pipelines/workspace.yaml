@@ -1,4 +1,4 @@
 load_from:
   - python_file:
-      relative_path: definitions.py
+      relative_path: dagster_pipelines/definitions.py
       working_directory: .

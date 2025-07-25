@@ -20,7 +20,10 @@ from dagster_pipelines.config.constants import EASTERN_TZ
 # pylint: disable=too-many-locals
 
 def produce_portfolio(
-    portfolio_date: str, arctic_library: object, tickers: list, logger: object
+    portfolio_date: str,
+    arctic_library: object,
+    tickers: list,
+    logger: object,
 ) -> pd.DataFrame:
     """
     Produces a sentiment-based portfolio with long/short positions 

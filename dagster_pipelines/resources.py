@@ -1,12 +1,16 @@
+"""
+Resources for Dagster pipelines.
+"""
 import os
 import boto3
 from dotenv import load_dotenv
 from arcticdb import Arctic
-from dagster import resource
+from dagster import resource, InitResourceContext
 
-
+# Disable unused argument for debugging purposes
+# pylint: disable=unused-argument
 @resource
-def s3_resource(context):
+def s3_resource(_init_context: InitResourceContext):
     """
     Initializes and returns a boto3 S3 client using environment variables.
 
@@ -18,8 +22,10 @@ def s3_resource(context):
     return s3_client
 
 
+# Disable unused argument for debugging purposes
+# pylint: disable=unused-argument
 @resource(required_resource_keys={"s3"})
-def arctic_db_resource(context):
+def arctic_db_resource(_init_context: InitResourceContext):
     """
     Initializes and returns an ArcticDB store connected to S3 using environment variables.
 
@@ -33,7 +39,12 @@ def arctic_db_resource(context):
     bucket_name = os.environ["S3_BUCKET"]
     # folder_name = os.environ["S3_FOLDER"]
     region = os.environ["AWS_REGION"]
-    endpoint_url = os.environ["S3_ENDPOINT_URL"]
+    # optional specification for debugging purposes
+    endpoint_url_env_var = os.environ.get("S3_ENDPOINT_URL", None)
+    if endpoint_url_env_var is None:
+        endpoint_url = "s3.amazonaws.com"
+    else:
+        endpoint_url = endpoint_url_env_var
     access_key = os.environ["AWS_ACCESS_KEY_ID"]
     secret_key = os.environ["AWS_SECRET_ACCESS_KEY"]
     try:
@@ -43,5 +54,5 @@ def arctic_db_resource(context):
     except Exception as e:
         raise ValueError(
             f"Error initializing ArcticDB in S3. Check that bucket exists and ~/.aws/credentials are configured: {e}"
-        )
+        ) from e
     return store

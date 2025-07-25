@@ -5,7 +5,7 @@ Ensures sentiment datasets for the given tickers exist in ArcticDB,
 
 from datetime import datetime
 import os
-from dagster import asset, AssetIn
+from dagster import asset, AssetIn, AssetExecutionContext
 from arcticdb.version_store.library import Library
 from arcticdb.exceptions import ArcticNativeException
 
@@ -18,9 +18,11 @@ from dagster_pipelines.config.constants import EASTERN_TZ
 
 @asset(
     required_resource_keys={"arctic_db", "s3"},
-    ins={"ishares_etf_holdings": AssetIn("ishares_etf_holdings")},
+    ins={"ishares_etf_holdings": AssetIn("ishares_etf_holdings_asset")},
 )
-def sentiment_dataset_asset(context: object, ishares_etf_holdings: list[str]) -> Library:
+def sentiment_dataset_asset(
+    context: AssetExecutionContext, ishares_etf_holdings: list[str]
+) -> Library:
     """
     Ensures sentiment datasets for the given tickers exist in ArcticDB, 
       downloading and storing if missing.

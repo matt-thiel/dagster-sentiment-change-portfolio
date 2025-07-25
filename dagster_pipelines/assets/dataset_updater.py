@@ -164,6 +164,7 @@ def update_sentiment_data(
     else:
         logger.info("Using exisiting sentiment data for %s.", portfolio_datetime)
 
+    # TODO: Instead of overwriting existing data, use .update() to add new data
     if updated_sentiment_df is not None:
         for symbol in base_dataset_symbols:
             updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
@@ -188,6 +189,34 @@ def update_sentiment_data(
                     ],
                 },
             )
+        # TODO: Only update change dataset with necessary updates, don't recalc on entire dataset
+        for symbol in feature_dataset_symbols:
+            if symbol == "sentimentNormalized_1d_change_1d_lag":
+                base_symbol = symbol.split("_1d_change_1d_lag", maxsplit=1)[0]
+                dataset = updated_sentiment_df.xs(base_symbol, axis=1, level=1)
+                dataset = dataset.pct_change(periods=1, fill_method=None).shift(1)
+                dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
+                existing_symbol = arctic_library.read(symbol)
+                existing_dataset = existing_symbol.data
+                updated_dataset = pd.concat([existing_dataset, updated_dataset])
+                updated_dataset = updated_dataset[
+                    ~updated_dataset.index.duplicated(keep="last")
+                ]
+                updated_dataset = updated_dataset.sort_index()
+                arctic_library.write(
+                    symbol,
+                    updated_dataset,
+                    metadata={
+                        "date_created": existing_symbol.metadata["date_created"],
+                        "date_updated": current_datetime.isoformat(),
+                        "data_start_date": updated_dataset.index.min(),
+                        "data_end_date": updated_dataset.index.max(),
+                        "source": "StockTwits",
+                        "last_dagster_run_id": existing_symbol.metadata[
+                            "last_dagster_run_id"
+                        ],
+                    },
+                )
     else:
         logger.info("Data is available for %s.", portfolio_datetime)
 

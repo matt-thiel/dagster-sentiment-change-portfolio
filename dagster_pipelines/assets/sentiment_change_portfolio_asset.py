@@ -22,6 +22,7 @@ from dagster import (
     build_op_context,
     AssetIn,
     build_init_resource_context,
+    AssetExecutionContext,
 )
 from dotenv import load_dotenv
 from vbase import (
@@ -52,13 +53,13 @@ partitions_def = DailyPartitionsDefinition(start_date="2025-01-01")
 @asset(
     partitions_def=partitions_def,
     ins={
-        "ishares_etf_holdings": AssetIn("ishares_etf_holdings"),
-        "sentiment_library": AssetIn("sentiment_dataset"),
+        "ishares_etf_holdings": AssetIn("ishares_etf_holdings_asset"),
+        "sentiment_library": AssetIn("sentiment_dataset_asset"),
     },
     required_resource_keys={"arctic_db", "s3"},
 )
 def portfolio_asset(
-    context: object,
+    context: AssetExecutionContext,
     ishares_etf_holdings: list,
     sentiment_library: Library,
 ) -> None:

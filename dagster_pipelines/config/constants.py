@@ -18,4 +18,4 @@ VBASE_FORWARDER_URL = "https://dev.api.vbase.com/forwarder-test/"
 # The name of the portfolio set (collection).
 # This is the vBase set (collection) that receive the object commitments (stamps)
 # for the individual portfolios.
-PORTFOLIO_NAME = "TestPortfolio"
+PORTFOLIO_NAME = "SentimentChangePortfolio"
