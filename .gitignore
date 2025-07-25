@@ -1,5 +1,6 @@
 # Config
 .env*
+.cursor/
 
 # Py ignored files
 __pycache__/
@@ -10,3 +11,4 @@ venv/
 
 # Dagster
 .tmp_dagster_*/
+dagster_portfolio_sample.egg-info/

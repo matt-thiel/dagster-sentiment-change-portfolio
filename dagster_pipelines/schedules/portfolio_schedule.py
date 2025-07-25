@@ -4,7 +4,8 @@ The schedule for the portfolio asset.
 
 from dagster import ScheduleDefinition, define_asset_job
 
-from dagster_pipelines.assets.portfolio_asset import portfolio_asset
+#from dagster_pipelines.assets.portfolio_asset import portfolio_asset
+from dagster_pipelines.assets.sentiment_change_portfolio_asset import portfolio_asset
 
 # Define a schedule to run the job at 3:50 PM ET on NYSE trading days
 portfolio_schedule = ScheduleDefinition(
