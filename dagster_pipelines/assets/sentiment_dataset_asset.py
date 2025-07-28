@@ -17,7 +17,7 @@ from dagster_pipelines.config.constants import EASTERN_TZ
 # pylint: disable=too-many-locals
 
 @asset(
-    required_resource_keys={"arctic_db", "s3"},
+    required_resource_keys={"arctic_db"},
     ins={"ishares_etf_holdings": AssetIn("ishares_etf_holdings_asset")},
 )
 def sentiment_dataset_asset(
@@ -28,7 +28,7 @@ def sentiment_dataset_asset(
       downloading and storing if missing.
 
     Args:
-        context: Dagster asset context with ArcticDB and S3 resources.
+        context: Dagster asset context with ArcticDB resource.
         ishares_etf_holdings (list[str]): List of ETF holding tickers.
 
     Returns:
@@ -45,7 +45,7 @@ def sentiment_dataset_asset(
     arctic_library = arctic_store[library_name]
 
     base_dataset_symbols = ["sentimentNormalized", "messageVolumeNormalized"]
-    feature_dataset_symbols = ["sentimentNormalized_1d_change_1d_lag"]
+    #feature_dataset_symbols = ["sentimentNormalized_1d_change_1d_lag"]
     st_username = os.environ["STOCKTWITS_USERNAME"]
     st_password = os.environ["STOCKTWITS_PASSWORD"]
     sentiment_features = None
@@ -78,29 +78,5 @@ def sentiment_dataset_asset(
             dataset = sentiment_features.xs(symbol, axis=1, level=1)
             arctic_library.write(symbol, dataset, metadata=metadata)
 
-    for symbol in feature_dataset_symbols:
-        if symbol == "sentimentNormalized_1d_change_1d_lag":
-            base_symbol = symbol.split("_1d_change_1d_lag", maxsplit=1)[0]
-            if sentiment_features is None:
-                try:
-                    arctic_library.read(symbol)
-                    logger.info(
-                        "Feature dataset %s found in ArcticDB. Skipping creation...",
-                        symbol,
-                    )
-                    return arctic_library
-                except ArcticNativeException:
-                    logger.warning(
-                        "Error reading symbol %s from ArcticDB. Creating...",
-                        symbol,
-                    )
-
-                    dataset = arctic_library.read(base_symbol)
-            else:
-                dataset = sentiment_features.xs(base_symbol, axis=1, level=1)
-
-            dataset = dataset.pct_change(periods=1, fill_method=None).shift(1)
-            dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
-            arctic_library.write(symbol, dataset, metadata=metadata)
 
     return arctic_library

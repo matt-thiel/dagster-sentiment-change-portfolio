@@ -14,7 +14,7 @@ import numpy as np
 
 from dagster_pipelines.utils.datetime_utils import ensure_timezone
 from dagster_pipelines.config.constants import EASTERN_TZ
-
+from dagster_pipelines.assets.sentiment_change_feature import get_sentiment_change_feature
 
 # Disable too many locals due to function complexity
 # pylint: disable=too-many-locals
@@ -95,11 +95,18 @@ def produce_portfolio(
     signals = []
 
     for feature_name in selected_features:
-        df_sentiment = arctic_library.read(feature_name).data
-        df_sentiment = df_sentiment.loc[:, df_sentiment.columns.isin(tickers)]
+        df_sentiment_feature = get_sentiment_change_feature(
+            arctic_library=arctic_library,
+            sentiment_symbol='sentimentNormalized',
+            partition_date=portfolio_datetime,
+            tickers=tickers,
+            lag_periods=1,
+            change_period=1,
+        )
 
-        closest_date = df_sentiment.index.asof(portfolio_datetime)
-        todays_sentiment = df_sentiment.loc[closest_date]
+        closest_date = df_sentiment_feature.index.asof(portfolio_datetime)
+        logger.info(f"Portfolio date: {portfolio_datetime}, Feature date: {closest_date}")
+        todays_sentiment = df_sentiment_feature.loc[closest_date]
 
         df_feature = todays_sentiment.rank(method="first")
         feature_dfs[feature_name] = (

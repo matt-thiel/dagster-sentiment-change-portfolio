@@ -18,7 +18,7 @@ from dagster_pipelines.config.constants import EASTERN_TZ, ISHARES_ETF_URLS
 # Disable too many locals due to the function being complex
 # pylint: disable=too-many-locals
 def get_ishares_etf_tickers(
-    etf_ticker: str, arctic_library: object, logger: object, timeout: int = 10
+    etf_ticker: str, partition_date: str, arctic_library: object, logger: object, timeout: int = 10
 ) -> list[str]:
     """
     Fetches and caches ETF holdings from iShares, with intelligent caching and data validation.
@@ -48,20 +48,20 @@ def get_ishares_etf_tickers(
     try:
         latest_record = arctic_library.read(f"{etf_ticker}_holdings")
         logger.info("Found recent data in ArcticDB for %s", etf_ticker)
-        as_of_date = latest_record.metadata.get("as_of_date")
-
-        as_of_dt = datetime.strptime(as_of_date, "%Y-%m-%d")
-        as_of_dt = ensure_timezone(as_of_dt, EASTERN_TZ)
+        
+        last_as_of_dt = latest_record.data.index[-1]
+        last_as_of_dt = ensure_timezone(last_as_of_dt, EASTERN_TZ)
 
         today = datetime.now(EASTERN_TZ)
-        if (today - as_of_dt) >= timedelta(days=60):
+        if (today - last_as_of_dt) >= timedelta(days=60):
             logger.warning(
-                "Data for %s is stale (as_of_date: %s). Redownloading...",
+                "Data for %s is stale (last_as_of_date: %s). Redownloading...",
                 etf_ticker,
-                as_of_date,
+                last_as_of_dt,
             )
         else:
-            return latest_record.data.index.tolist()
+            last_row = latest_record.data.iloc[-1]
+            return last_row[last_row.notna()].index.tolist()
 
     except ArcticNativeException:
         logger.warning(
@@ -119,6 +119,9 @@ def get_ishares_etf_tickers(
         ]
 
     cleaned_tickers = valid_equity_df.index.tolist()
+    output_df = valid_equity_df[['Weight (%)']].T
+    #output_df.index = [as_of_date.date()]
+    output_df.index = [as_of_date]
 
     logger.info(
         "Found %s unique equity tickers from %s total holdings.",
@@ -126,19 +129,21 @@ def get_ishares_etf_tickers(
         len(holdings_df),
     )
 
+
+
     # Store in ArcticDB
     symbol_name = f"{etf_ticker}_holdings"
     current_time = datetime.now(EASTERN_TZ)
-    arctic_library.write(
-        symbol_name,
-        holdings_df,
-        metadata={
-            "as_of_date": as_of_date.strftime("%Y-%m-%d"),
-            "source": "iShares",
-            "etf_ticker": etf_ticker,
-            "download_timestamp": current_time.isoformat(),
-        },
-    )
+    
+    arctic_library.update(symbol=symbol_name,
+                            data=output_df,
+                            upsert=True,
+                            metadata={
+                                "source": "iShares",
+                                "etf_ticker": etf_ticker,
+                                "last_updated": current_time.isoformat()},
+                            prune_previous_versions=True)
+
     logger.info("Stored %s holdings in ArcticDB as '%s'", etf_ticker, symbol_name)
 
     return cleaned_tickers

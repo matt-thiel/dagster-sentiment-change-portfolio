@@ -2,6 +2,7 @@
 Constants for the project.
 """
 import pytz
+from dagster import DailyPartitionsDefinition
 
 EASTERN_TZ = pytz.timezone("America/New_York")
 
@@ -19,3 +20,10 @@ VBASE_FORWARDER_URL = "https://dev.api.vbase.com/forwarder-test/"
 # This is the vBase set (collection) that receive the object commitments (stamps)
 # for the individual portfolios.
 PORTFOLIO_NAME = "SentimentChangePortfolio"
+
+# Define a daily partition for portfolio rebalancing.
+# The portfolio rebalances daily starting from 2025-01-01.
+PORTFOLIO_PARTITIONS_DEF = DailyPartitionsDefinition(start_date="2025-01-01")
+
+BASE_DATASET_SYMBOLS = ["sentimentNormalized", "messageVolumeNormalized"]
+FEATURE_LOOKBACK_WINDOW = 2  # Extra days of data needed to get feature value for today
