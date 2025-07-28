@@ -28,7 +28,9 @@ def ishares_etf_holdings_asset(context: AssetExecutionContext) -> list[str]:
             arctic_store.create_library(library_name)
         # Get the library
         arctic_library = arctic_store[library_name]
-        holdings = get_ishares_etf_tickers(etf_ticker, partition_date, arctic_library, logger)
+        holdings = get_ishares_etf_tickers(
+            etf_ticker, partition_date, arctic_library, logger
+        )
     except Exception as e:
         logger.error(f"Error creating library, check that S3 bucket exists: {e}")
         raise e

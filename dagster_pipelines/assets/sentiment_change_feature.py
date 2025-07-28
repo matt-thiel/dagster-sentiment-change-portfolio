@@ -1,11 +1,15 @@
+"""
+Module with a function to get the sentiment change feature for a given partition date.
+"""
 
 from datetime import timedelta
 import pandas as pd
 import numpy as np
 import pandas_market_calendars as mcal
 
-from dagster_pipelines.config.constants import EASTERN_TZ
-from dagster_pipelines.utils.datetime_utils import ensure_timezone
+# Disable too many arguments to allow for generality
+# pylint: disable=too-many-arguments
+
 
 def get_sentiment_change_feature(
     arctic_library: object,
@@ -29,21 +33,22 @@ def get_sentiment_change_feature(
     Returns:
         pd.DataFrame: The sentiment change feature for the given symbol and partition date.
     """
-    nyse = mcal.get_calendar('NYSE')
+    nyse = mcal.get_calendar("NYSE")
 
     periods = change_period + lag_periods + 2
-    #partition_date = pd.to_datetime(partition_date)
-    #partition_date = ensure_timezone(partition_date, EASTERN_TZ)
 
     # Get enough days to ensure we have n trading days
-    start_date = partition_date - timedelta(days=periods+7)  # Buffer to ensure enough trading days
+    start_date = partition_date - timedelta(
+        days=periods + 7
+    )  # Buffer to ensure enough trading days
     schedule = nyse.schedule(start_date=start_date, end_date=partition_date)
-    
 
     date_range = schedule.index[-periods:].to_list()
 
     if len(date_range) < periods:
-        raise ValueError(f"Not enough trading days in the date range for {sentiment_symbol} and {partition_date}")
+        raise ValueError(
+            f"Not enough trading days in the date range for {sentiment_symbol} and {partition_date}"
+        )
 
     data_read = arctic_library.read(
         symbol=sentiment_symbol,
@@ -51,8 +56,9 @@ def get_sentiment_change_feature(
         columns=tickers,
     ).data
 
-
     change_feature = data_read.pct_change(periods=change_period, fill_method=None)
-    change_feature = change_feature.shift(lag_periods).replace([np.inf, -np.inf], np.nan)
+    change_feature = change_feature.shift(lag_periods).replace(
+        [np.inf, -np.inf], np.nan
+    )
 
     return change_feature.iloc[[-1]]

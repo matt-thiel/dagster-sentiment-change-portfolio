@@ -9,7 +9,6 @@ from dagster import asset, AssetIn, AssetExecutionContext
 from arcticdb.version_store.library import Library
 from arcticdb.exceptions import ArcticNativeException
 
-import numpy as np
 from dagster_pipelines.utils.sentiment_utils import get_chart_for_symbols
 from dagster_pipelines.config.constants import EASTERN_TZ
 
@@ -45,7 +44,7 @@ def sentiment_dataset_asset(
     arctic_library = arctic_store[library_name]
 
     base_dataset_symbols = ["sentimentNormalized", "messageVolumeNormalized"]
-    #feature_dataset_symbols = ["sentimentNormalized_1d_change_1d_lag"]
+
     st_username = os.environ["STOCKTWITS_USERNAME"]
     st_password = os.environ["STOCKTWITS_PASSWORD"]
     sentiment_features = None

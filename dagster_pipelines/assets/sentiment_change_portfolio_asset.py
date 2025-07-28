@@ -25,8 +25,11 @@ from dagster import (
 )
 
 
-from dagster_pipelines.utils.database_utils import print_arcticdb_summary, print_arcticdb_symbol
-from dagster_pipelines.config.constants import EASTERN_TZ, VBASE_FORWARDER_URL, PORTFOLIO_NAME
+from dagster_pipelines.utils.database_utils import (
+    print_arcticdb_summary,
+    print_arcticdb_symbol,
+)
+from dagster_pipelines.config.constants import EASTERN_TZ
 from dagster_pipelines.assets.sentiment_change_portfolio_producer import (
     produce_portfolio,
 )
@@ -52,7 +55,7 @@ def portfolio_asset(
     sentiment_library: Library,
 ) -> None:
     """
-    Generates and saves a portfolio for the SPY ETF for a given partition date, 
+    Generates and saves a portfolio for the SPY ETF for a given partition date,
       stamps it in vBase, and uploads to S3.
 
     Args:
@@ -75,8 +78,6 @@ def portfolio_asset(
         "VBASE_COMMITMENT_SERVICE_PRIVATE_KEY",
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
-    #    "S3_BUCKET",
-    #    "S3_FOLDER",
     ]
     for setting in required_settings:
         if setting not in os.environ:
@@ -101,14 +102,14 @@ def portfolio_asset(
             logger=context.log,
         )
         context.log.info(f"{partition_date}: position_df = \n{df_portfolio}")
-        
+
         # TODO: Save portfolio to S3 using vbase API
-        context.log.warning("Saving portfolio to S3 and stamping with vBase is not yet implemented.")
-    
+        context.log.warning(
+            "Saving portfolio to S3 and stamping with vBase is not yet implemented."
+        )
+
     except ValueError as e:
         context.log.error(str(e))
-
-    
 
 
 def debug_portfolio(date_str: str | None = None) -> None:
@@ -143,11 +144,12 @@ def debug_portfolio(date_str: str | None = None) -> None:
     )
 
     print_arcticdb_summary(arctic_db, context.log)
-    print_arcticdb_symbol(symbol="sentimentNormalized", 
-                          library="sentiment_features", 
-                          arctic_object=arctic_db, 
-                          logger=context.log)
-
+    print_arcticdb_symbol(
+        symbol="sentimentNormalized",
+        library="sentiment_features",
+        arctic_object=arctic_db,
+        logger=context.log,
+    )
 
 if __name__ == "__main__":
     # Run for today's date.

@@ -14,10 +14,13 @@ import numpy as np
 
 from dagster_pipelines.utils.datetime_utils import ensure_timezone
 from dagster_pipelines.config.constants import EASTERN_TZ
-from dagster_pipelines.assets.sentiment_change_feature import get_sentiment_change_feature
+from dagster_pipelines.assets.sentiment_change_feature import (
+    get_sentiment_change_feature,
+)
 
 # Disable too many locals due to function complexity
 # pylint: disable=too-many-locals
+
 
 def produce_portfolio(
     portfolio_date: str,
@@ -26,7 +29,7 @@ def produce_portfolio(
     logger: object,
 ) -> pd.DataFrame:
     """
-    Produces a sentiment-based portfolio with long/short positions 
+    Produces a sentiment-based portfolio with long/short positions
       based on sentiment change features.
 
     This function implements a market-neutral strategy that:
@@ -86,7 +89,6 @@ def produce_portfolio(
         logger.error(error_message)
         raise ValueError(error_message)
 
-
     selected_features = [
         "sentimentNormalized_1d_change_1d_lag",
     ]
@@ -97,7 +99,7 @@ def produce_portfolio(
     for feature_name in selected_features:
         df_sentiment_feature = get_sentiment_change_feature(
             arctic_library=arctic_library,
-            sentiment_symbol='sentimentNormalized',
+            sentiment_symbol="sentimentNormalized",
             partition_date=portfolio_datetime,
             tickers=tickers,
             lag_periods=1,
@@ -105,8 +107,17 @@ def produce_portfolio(
         )
 
         closest_date = df_sentiment_feature.index.asof(portfolio_datetime)
-        logger.info(f"Portfolio date: {portfolio_datetime}, Feature date: {closest_date}")
+        logger.info(
+            "Portfolio date: %s \nFeature date: %s", portfolio_datetime, closest_date
+        )
         todays_sentiment = df_sentiment_feature.loc[closest_date]
+
+        if todays_sentiment.isna().any():
+            logger.warning(
+                "NaN values in sentiment feature for %s on %s",
+                feature_name,
+                portfolio_datetime,
+            )
 
         df_feature = todays_sentiment.rank(method="first")
         feature_dfs[feature_name] = (
@@ -135,14 +146,10 @@ def produce_portfolio(
 
     # Equal weight Market-neutral: 1/number_of_positions for each direction
     if long_positions.sum() > 0:
-        position_df.loc[long_positions, "wt"] = (
-            1.0 / long_positions.sum()
-        )
+        position_df.loc[long_positions, "wt"] = 1.0 / long_positions.sum()
 
     if short_positions.sum() > 0:
-        position_df.loc[short_positions, "wt"] = (
-            -1.0 / short_positions.sum()
-        )
+        position_df.loc[short_positions, "wt"] = -1.0 / short_positions.sum()
 
     # Set NaN (no position) to 0
     position_df["wt"] = position_df["wt"].fillna(0)
