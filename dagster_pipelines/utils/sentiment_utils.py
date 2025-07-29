@@ -15,6 +15,7 @@ STOCKTWITS_ENDPOINT = (
     "https://api-gw-prd.stocktwits.com/api-middleware/external/sentiment/v2/"
 )
 
+
 # Disable too many arguments due to arguments necessary for api call
 # pylint: disable=too-many-arguments
 def get_symbol_chart(
@@ -84,6 +85,7 @@ def get_symbol_chart(
     )
 
     return response_df
+
 
 # Disable too many arguments due to arguments necessary for api call
 # pylint: disable=too-many-arguments
@@ -179,8 +181,8 @@ def select_zoom(days_to_query: int) -> str:
             - 'ALL' for all available data
     """
     zooms = [
-        #(1, "1D"),
-        #(7, "1W"),
+        # (1, "1D"),
+        # (7, "1W"),
         (30, "1M"),
         (90, "3M"),
         (180, "6M"),

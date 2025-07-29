@@ -6,7 +6,10 @@ import os
 from datetime import datetime
 import pandas as pd
 
-from dagster_pipelines.utils.database_utils import check_db_fragmentation
+from dagster_pipelines.utils.database_utils import (
+    arctic_db_write_or_append,
+    check_db_fragmentation,
+)
 from dagster_pipelines.utils.sentiment_utils import get_chart_for_symbols, select_zoom
 from dagster_pipelines.utils.datetime_utils import ensure_timezone
 from dagster_pipelines.config.constants import (
@@ -14,6 +17,62 @@ from dagster_pipelines.config.constants import (
     BASE_DATASET_SYMBOLS,
     FEATURE_LOOKBACK_WINDOW,
 )
+
+# Requires many arguments for update flexibility
+# pylint: disable=too-many-arguments
+def _download_and_update_sentiment_data(
+    arctic_library: object,
+    tickers: list,
+    zoom: str,
+    last_available_datetime: datetime,
+    current_datetime: datetime,
+    logger: object,
+    add_new_columns: bool = False,
+) -> None:
+    """
+    Download and update sentiment data for a list of tickers.
+
+    Args:
+        arctic_library (object): ArcticDB library instance.
+        tickers (list): List of ticker symbols to update.
+        zoom (str): Zoom level for sentiment data.
+        last_available_datetime (datetime): The last available datetime for sentiment data.
+        current_datetime (datetime): The current datetime.
+        logger (object): Logger for logging messages.
+        add_new_columns (bool): Whether new columns will be added to the dataset.
+    """
+
+    st_username = os.environ["STOCKTWITS_USERNAME"]
+    st_password = os.environ["STOCKTWITS_PASSWORD"]
+
+    updated_sentiment_df = get_chart_for_symbols(
+        symbols=tickers,
+        zoom=zoom,
+        timeout=10,
+        username=st_username,
+        password=st_password,
+        logger=logger,
+    ).select_dtypes(include=["float64", "int64"])
+
+    if add_new_columns:
+        updated_sentiment_df = updated_sentiment_df[
+            (updated_sentiment_df.index < current_datetime)
+        ]
+    else:
+        updated_sentiment_df = updated_sentiment_df[
+            (updated_sentiment_df.index > last_available_datetime)
+            & (updated_sentiment_df.index < current_datetime)
+        ]
+
+    for symbol in BASE_DATASET_SYMBOLS:
+        _update_base_dataset_symbol(
+            arctic_library,
+            symbol,
+            updated_sentiment_df,
+            current_datetime,
+            add_new_columns=add_new_columns,
+        )
+
 
 def _update_base_dataset_symbol(
     arctic_library: object,
@@ -33,7 +92,6 @@ def _update_base_dataset_symbol(
         add_new_columns (bool): Whether new columns will be added to the dataset.
     """
     updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
-    
 
     if add_new_columns:
         existing_symbol = arctic_library.read(symbol)
@@ -42,32 +100,24 @@ def _update_base_dataset_symbol(
         # Add new columns to existing dataset
         updated_dataset = updated_dataset.combine_first(existing_dataset)
         updated_dataset = updated_dataset.sort_index()
-        arctic_library.write(
-            symbol=symbol,
-            data=updated_dataset,
-            metadata={
-            "date_created": previous_metadata["date_created"],
-            "date_updated": current_datetime.isoformat(),
-            "source": "StockTwits",
-            "last_dagster_run_id": previous_metadata["last_dagster_run_id"],
-            },
-            prune_previous_versions=True,
-        )
     else:
         previous_metadata = arctic_library.read_metadata(symbol).metadata
 
-        #arctic_library.update(
-        arctic_library.append(
-            symbol=symbol,
-            data=updated_dataset,
-            metadata={
-                "date_created": previous_metadata["date_created"],
-                "date_updated": current_datetime.isoformat(),
-                "source": "StockTwits",
-                "last_dagster_run_id": previous_metadata["last_dagster_run_id"],
-            },
-            prune_previous_versions=True,
-        )
+    new_metadata = {
+        "date_created": previous_metadata["date_created"],
+        "date_updated": current_datetime.isoformat(),
+        "source": "StockTwits",
+        "last_dagster_run_id": previous_metadata["last_dagster_run_id"],
+    }
+
+    arctic_db_write_or_append(
+        symbol=symbol,
+        arctic_library=arctic_library,
+        data=updated_dataset,
+        metadata=new_metadata,
+        prune_previous_versions=True,
+    )
+
 
 # Complex function needs many locals
 # pylint: disable=too-many-locals
@@ -93,8 +143,6 @@ def update_sentiment_data(
     portfolio_datetime = datetime.strptime(portfolio_date, "%Y-%m-%d")
     portfolio_datetime = ensure_timezone(portfolio_datetime, EASTERN_TZ)
     current_datetime = datetime.now(EASTERN_TZ)
-    st_username = os.environ["STOCKTWITS_USERNAME"]
-    st_password = os.environ["STOCKTWITS_PASSWORD"]
 
     if not arctic_library.has_symbol("sentimentNormalized"):
         raise ValueError("sentimentNormalized dataset not found in ArcticDB")
@@ -112,71 +160,43 @@ def update_sentiment_data(
         raise ValueError(
             "Requested portfolio date is before earliest available sentiment date."
         )
+
     if portfolio_datetime > last_available_date:
         timedelta_to_last = (current_datetime - last_available_date).days
         if timedelta_to_last < 1:
-            logger.warning("Cannot update with today's date because it is before market close.")
+            logger.warning(
+                "Cannot update with today's date because it is before market close."
+            )
             return
-        logger.warning("No recent sentiment data for %s, updating...", portfolio_datetime)
+        logger.warning(
+            "No recent sentiment data for %s, updating...", portfolio_datetime
+        )
         zoom_param = select_zoom(timedelta_to_last + FEATURE_LOOKBACK_WINDOW)
 
-        # Only update what is in the dataset because anything missing will be downloaded in the next step
-        update_tickers = dataset_cols
-
-        updated_sentiment_df = get_chart_for_symbols(
-            symbols=update_tickers,
+        # Only update existing, missing tickers are added in next step
+        _download_and_update_sentiment_data(
+            arctic_library=arctic_library,
+            tickers=dataset_cols,
             zoom=zoom_param,
-            timeout=10,
-            username=st_username,
-            password=st_password,
+            last_available_datetime=last_available_date,
+            current_datetime=current_datetime,
             logger=logger,
-        ).select_dtypes(include=["float64", "int64"])
-
-        # Only pass new data to the updater helper
-        updated_sentiment_df = updated_sentiment_df[
-            (updated_sentiment_df.index > last_available_date) &
-            (updated_sentiment_df.index < current_datetime)
-        ]
-
-        for symbol in BASE_DATASET_SYMBOLS:
-            _update_base_dataset_symbol(
-                arctic_library,
-                symbol,
-                updated_sentiment_df,
-                current_datetime,
-                add_new_columns=False,
-            )
-    else:
-        logger.info("Data is current for %s.", portfolio_datetime)
+            add_new_columns=False,
+        )
 
     if missing_tickers:
         logger.warning("Tickers missing from sentiment data: %s", missing_tickers)
         logger.warning("Downloading new tickers...")
 
-        updated_sentiment_df = get_chart_for_symbols(
-            symbols=missing_tickers,
-            zoom="ALL",
-            timeout=10,
-            username=st_username,
-            password=st_password,
+        _download_and_update_sentiment_data(
+            arctic_library=arctic_library,
+            tickers=missing_tickers,
+            zoom=zoom_param,
+            last_available_datetime=last_available_date,
+            current_datetime=current_datetime,
             logger=logger,
-        ).select_dtypes(include=["float64", "int64"])
-
-
-
-        updated_sentiment_df = updated_sentiment_df[
-            (updated_sentiment_df.index < current_datetime)
-        ]
-
-
-        for symbol in BASE_DATASET_SYMBOLS:
-            _update_base_dataset_symbol(
-                arctic_library,
-                symbol,
-                updated_sentiment_df,
-                current_datetime,
-                add_new_columns=True,
-            )
+            add_new_columns=True,
+        )
 
     # Check datase fragmentation
     for symbol in BASE_DATASET_SYMBOLS:

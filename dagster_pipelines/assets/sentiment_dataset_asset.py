@@ -7,13 +7,13 @@ from datetime import datetime
 import os
 from dagster import asset, AssetIn, AssetExecutionContext
 from arcticdb.version_store.library import Library
-from arcticdb.exceptions import ArcticNativeException
 
 from dagster_pipelines.utils.sentiment_utils import get_chart_for_symbols
-from dagster_pipelines.config.constants import EASTERN_TZ
+from dagster_pipelines.config.constants import BASE_DATASET_SYMBOLS, EASTERN_TZ
 
 # Disable too many locals due to function complexity
 # pylint: disable=too-many-locals
+
 
 @asset(
     required_resource_keys={"arctic_db"},
@@ -23,7 +23,7 @@ def sentiment_dataset_asset(
     context: AssetExecutionContext, ishares_etf_holdings: list[str]
 ) -> Library:
     """
-    Ensures sentiment datasets for the given tickers exist in ArcticDB, 
+    Ensures sentiment datasets for the given tickers exist in ArcticDB,
       downloading and storing if missing.
 
     Args:
@@ -43,18 +43,14 @@ def sentiment_dataset_asset(
     # Get the library
     arctic_library = arctic_store[library_name]
 
-    base_dataset_symbols = ["sentimentNormalized", "messageVolumeNormalized"]
-
     st_username = os.environ["STOCKTWITS_USERNAME"]
     st_password = os.environ["STOCKTWITS_PASSWORD"]
     sentiment_features = None
 
-    try:
-        for symbol in base_dataset_symbols:
-            record = arctic_library.read(symbol)
-            dataset = record.data
-    except ArcticNativeException:
-        logger.warning(f"Dataset {symbol} not found in ArcticDB. Downloading...")
+    # Code similar to sentiment updater, disable warning
+    # pylint: disable=duplicate-code
+    if not all(arctic_library.has_symbol(symbol) for symbol in BASE_DATASET_SYMBOLS):
+        logger.warning("Dataset not found in ArcticDB. Downloading...")
         sentiment_features = get_chart_for_symbols(
             symbols=ishares_etf_holdings,
             zoom="ALL",
@@ -75,9 +71,8 @@ def sentiment_dataset_asset(
             "source": "StockTwits",
             "last_dagster_run_id": getattr(context, "run_id", None),
         }
-        for symbol in base_dataset_symbols:
+        for symbol in BASE_DATASET_SYMBOLS:
             dataset = sentiment_features.xs(symbol, axis=1, level=1)
             arctic_library.write(symbol, dataset, metadata=metadata)
-
 
     return arctic_library

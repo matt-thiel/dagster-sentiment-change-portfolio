@@ -6,6 +6,7 @@ fragmentation checking and defragmentation of ArcticDB symbols.
 """
 
 from arcticdb.exceptions import ArcticNativeException
+import pandas as pd
 
 
 def check_db_fragmentation(
@@ -52,6 +53,7 @@ def check_db_fragmentation(
             db_symbol,
             e,
         )
+
 
 # Debugging info function requires a lot of locals and branches
 # pylint: disable=too-many-locals, too-many-branches, too-many-nested-blocks
@@ -110,7 +112,10 @@ def print_arcticdb_summary(store: object, logger: object) -> None:
     except ArcticNativeException as exc:
         logger.error("Error summarizing ArcticDB: %s", exc)
 
-def print_arcticdb_symbol(symbol: str, library: str, arctic_object: object, logger: object) -> None:
+
+def print_arcticdb_symbol(
+    symbol: str, library: str, arctic_object: object, logger: object
+) -> None:
     """
     Print the dataframe info for a given symbol in ArcticDB.
     """
@@ -121,3 +126,29 @@ def print_arcticdb_symbol(symbol: str, library: str, arctic_object: object, logg
         logger.info("Symbol dataframe tail: %s", symbol_data.data.tail())
     except ArcticNativeException as exc:
         logger.error("Error reading symbol '%s': %s", symbol, exc)
+
+
+def arctic_db_write_or_append(
+    symbol: str,
+    arctic_library: object,
+    data: pd.DataFrame,
+    metadata: dict,
+    prune_previous_versions: bool = True,
+) -> None:
+    """
+    Write data to ArcticDB if the symbol does not exist, otherwise append to the exisitng symbol.
+    """
+    if arctic_library.has_symbol(symbol):
+        arctic_library.append(
+            symbol=symbol,
+            data=data,
+            metadata=metadata,
+            prune_previous_versions=prune_previous_versions,
+        )
+    else:
+        arctic_library.write(
+            symbol=symbol,
+            data=data,
+            metadata=metadata,
+            prune_previous_versions=prune_previous_versions,
+        )

@@ -1,6 +1,7 @@
 """
 Constants for the project.
 """
+
 import pytz
 from dagster import DailyPartitionsDefinition
 
@@ -27,4 +28,6 @@ PORTFOLIO_PARTITIONS_DEF = DailyPartitionsDefinition(start_date="2025-01-01")
 
 BASE_DATASET_SYMBOLS = ["sentimentNormalized", "messageVolumeNormalized"]
 FEATURE_LOOKBACK_WINDOW = 2  # Extra days of data needed to get feature value for today
-NULL_CHANGE_WINDOW = 20 # Number of days to look back for finding low sentiment change stocks
+NULL_CHANGE_WINDOW = (
+    20  # Number of days to look back for finding low sentiment change stocks
+)

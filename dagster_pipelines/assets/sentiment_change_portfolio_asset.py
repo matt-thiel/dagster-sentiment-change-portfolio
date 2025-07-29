@@ -152,6 +152,7 @@ def debug_portfolio(date_str: str | None = None) -> None:
         logger=context.log,
     )
 
+
 if __name__ == "__main__":
     # Run for today's date.
     debug_portfolio()

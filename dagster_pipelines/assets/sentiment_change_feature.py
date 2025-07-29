@@ -42,24 +42,19 @@ def get_sentiment_change_feature(
     # Number of rows to read from database
     periods = change_period + lag_periods + 3
     # Conservative lookback for NYSE schedule dates
-    lookback_window = max(periods+7, NULL_CHANGE_WINDOW)
+    lookback_window = max(periods + 7, NULL_CHANGE_WINDOW)
 
     # Get enough days to ensure we have periods trading days in schedule
-    start_date = partition_date - timedelta(
-        days=lookback_window
-    )
+    start_date = partition_date - timedelta(days=lookback_window)
     schedule = nyse.schedule(start_date=start_date, end_date=partition_date)
 
     # Only get dates before the current partition date
     schedule = schedule[schedule["market_close"] < partition_date]
-    
 
     if remove_null_changes:
-        #date_range = schedule.index[-lookback_window:].to_list()
-        date_range = schedule['market_close'][-lookback_window:].to_list()
+        date_range = schedule["market_close"][-lookback_window:].to_list()
     else:
-       # date_range = schedule.index[-periods:].to_list()
-       date_range = schedule['market_close'][-periods:].to_list()
+        date_range = schedule["market_close"][-periods:].to_list()
 
     if len(date_range) < periods:
         raise ValueError(
@@ -80,7 +75,9 @@ def get_sentiment_change_feature(
 
     # Remove tickers from universe if sentiment doesn't change over the lookback window
     if remove_null_changes:
-        change_feature = change_feature.loc[:, change_feature.abs().sum(axis=0) > null_change_threshold]
+        change_feature = change_feature.loc[
+            :, change_feature.abs().sum(axis=0) > null_change_threshold
+        ]
 
     # Only care about the most recent row for the current portfolio
     return change_feature.iloc[[-1]]
