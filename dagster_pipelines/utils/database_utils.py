@@ -134,6 +134,8 @@ def print_arcticdb_symbol(
         logger.error("Error reading symbol '%s': %s", symbol, exc)
 
 
+# Needs many arguments for flexibility.
+# pylint: disable=too-many-arguments
 def arctic_db_write_or_append(
     symbol: str,
     arctic_library: object,

@@ -122,7 +122,7 @@ def _update_base_dataset_symbol(
         data=updated_dataset,
         metadata=new_metadata,
         prune_previous_versions=True,
-        force_write=add_new_columns, # Overwrite existing with combined dataset
+        force_write=add_new_columns,  # Overwrite existing with combined dataset
     )
 
 

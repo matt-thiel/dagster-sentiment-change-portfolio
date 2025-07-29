@@ -79,6 +79,7 @@ def _download_ishares_etf_holdings(
 
     return output_df
 
+
 def get_most_recent_etf_holdings(
     arctic_library: object,
     etf_ticker: str,
@@ -97,14 +98,13 @@ def get_most_recent_etf_holdings(
     # Ensure data for the symbol exists.
     if not arctic_library.has_symbol(symbol_name):
         raise ValueError(f"No holdings found for {etf_ticker}")
-    
+
     # Get the most recent universe.
     latest_universe = arctic_library.tail(symbol_name, n=1, columns=None).data
     holdings_row = latest_universe.iloc[-1]
 
     return holdings_row[holdings_row.notna()].index.tolist()
-    
-        
+
 
 def initialize_ishares_etf_holdings(
     etf_ticker: str,
@@ -125,10 +125,8 @@ def initialize_ishares_etf_holdings(
     current_time = datetime.now(EASTERN_TZ)
 
     if arctic_library.has_symbol(symbol_name):
-        logger.info(
-            "iShares ETF holdings library already exists for %s", etf_ticker
-        )
-        #latest_record = arctic_library.tail(symbol_name, n=1, columns=None).data
+        logger.info("iShares ETF holdings library already exists for %s", etf_ticker)
+        # latest_record = arctic_library.tail(symbol_name, n=1, columns=None).data
     else:
 
         logger.info("Downloading %s holdings from iShares...", etf_ticker)
@@ -151,15 +149,16 @@ def initialize_ishares_etf_holdings(
 
         logger.info("Stored %s holdings in ArcticDB as '%s'", etf_ticker, symbol_name)
 
-    #holdings_row = latest_record.iloc[-1]
-    #return holdings_row[holdings_row.notna()].index.tolist()
-    #return arctic_library[symbol_name]
+    # holdings_row = latest_record.iloc[-1]
+    # return holdings_row[holdings_row.notna()].index.tolist()
+    # return arctic_library[symbol_name]
+
 
 def _check_if_stale_holdings(
-        etf_ticker: str,
-        arctic_library: object,
-        logger: object,
-        timeout: int = 10,
+    etf_ticker: str,
+    arctic_library: object,
+    logger: object,
+    timeout: int = 10,
 ) -> None:
     """
     Checks if the ETF holdings are stale and downloads new data if needed.
@@ -257,7 +256,7 @@ def get_ishares_etf_tickers(
     # If no partition date, use most recent universe. Skip stale check.
     if partition_date is None:
         return get_most_recent_etf_holdings(arctic_library, etf_ticker)
-    
+
     # Ensure partition date is eastern timezone
     partition_date = datetime.strptime(partition_date, "%Y-%m-%d")
     partition_date = ensure_timezone(partition_date, EASTERN_TZ)
@@ -278,12 +277,12 @@ def get_ishares_etf_tickers(
                 "No as-of date before portfolio date, using holdings from portfolio date."
             )
             holdings_row = full_record.data.iloc[-1]
-
-        # Fallback to most recent universe if nothing before or including portfolio date.
-        logger.warning(
-            "No as-of date before or including portfolio date. Using most recent universe."
-        )
-        return get_most_recent_etf_holdings(arctic_library, etf_ticker)
+        else:
+            # Fallback to most recent universe if nothing before or including portfolio date.
+            logger.warning(
+                "No as-of date before or including portfolio date. Using most recent universe."
+            )
+            return get_most_recent_etf_holdings(arctic_library, etf_ticker)
     else:
         holdings_row = valid_rows.iloc[-1]
         logger.info("Using universe as of %s", holdings_row.name)

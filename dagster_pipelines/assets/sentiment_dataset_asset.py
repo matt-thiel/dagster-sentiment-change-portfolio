@@ -1,5 +1,5 @@
 """
-Ensures sentiment datasets for the given tickers exist in ArcticDB, 
+Ensures sentiment datasets for the given tickers exist in ArcticDB,
   downloading and storing if missing.
 """
 
@@ -9,7 +9,11 @@ from dagster import asset, AssetIn, AssetExecutionContext
 from arcticdb.version_store.library import Library
 
 from dagster_pipelines.utils.sentiment_utils import get_chart_for_symbols
-from dagster_pipelines.config.constants import BASE_DATASET_SYMBOLS, EASTERN_TZ, ETF_TICKER
+from dagster_pipelines.config.constants import (
+    BASE_DATASET_SYMBOLS,
+    EASTERN_TZ,
+    ETF_TICKER,
+)
 from dagster_pipelines.utils.ticker_utils import get_most_recent_etf_holdings
 
 # Disable too many locals due to function complexity
