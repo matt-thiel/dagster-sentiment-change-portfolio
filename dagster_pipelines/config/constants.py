@@ -14,7 +14,7 @@ ISHARES_ETF_URLS = {
     ),
 }
 
-# The vBase forwarder URL for making commitments via the vBase forwarder.
+# The vBase forwarder URL for making stamps.
 VBASE_FORWARDER_URL = "https://dev.api.vbase.com/forwarder-test/"
 
 # The name of the portfolio set (collection).
