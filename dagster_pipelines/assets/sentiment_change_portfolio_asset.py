@@ -29,7 +29,7 @@ from dagster_pipelines.utils.database_utils import (
     print_arcticdb_summary,
     print_arcticdb_symbol,
 )
-from dagster_pipelines.config.constants import EASTERN_TZ
+from dagster_pipelines.config.constants import EASTERN_TZ, ETF_TICKER
 from dagster_pipelines.assets.sentiment_change_portfolio_producer import (
     produce_portfolio,
 )
@@ -38,20 +38,21 @@ from dagster_pipelines.assets.etf_holdings_asset import ishares_etf_holdings_ass
 from dagster_pipelines.assets.sentiment_dataset_asset import sentiment_dataset_asset
 from dagster_pipelines.assets.dataset_updater import update_sentiment_data
 from dagster_pipelines.config.constants import PORTFOLIO_PARTITIONS_DEF
+from dagster_pipelines.utils.ticker_utils import get_ishares_etf_tickers
 
 
 # pylint: disable=too-many-locals
 @asset(
     partitions_def=PORTFOLIO_PARTITIONS_DEF,
     ins={
-        "ishares_etf_holdings": AssetIn("ishares_etf_holdings_asset"),
+        "holdings_library": AssetIn("ishares_etf_holdings_asset"),
         "sentiment_library": AssetIn("sentiment_dataset_asset"),
     },
     required_resource_keys={"arctic_db"},
 )
 def portfolio_asset(
     context: AssetExecutionContext,
-    ishares_etf_holdings: list,
+    holdings_library: Library,
     sentiment_library: Library,
 ) -> None:
     """
@@ -60,7 +61,7 @@ def portfolio_asset(
 
     Args:
         context: Dagster asset context with partition key and resources.
-        ishares_etf_holdings (list): List of ETF holding tickers.
+        holdings_library (Library): ArcticDB library containing ETF holdings.
         sentiment_library (Library): ArcticDB library with sentiment data.
 
     Returns:
@@ -88,6 +89,11 @@ def portfolio_asset(
     context.log.info("Starting portfolio generation for %s", partition_date)
 
     try:
+        # Get the tickers for the partition date.
+        ishares_etf_holdings = get_ishares_etf_tickers(
+            ETF_TICKER, partition_date, holdings_library, context.log
+        )
+
         # Update sentiment data if tickers are missing or data is out of date
         update_sentiment_data(
             sentiment_library,
@@ -133,15 +139,15 @@ def debug_portfolio(date_str: str | None = None) -> None:
     )
 
     # Get the holdings (call the asset function directly)
-    ishares_etf_holdings = ishares_etf_holdings_asset(context)
+    holdings_library = ishares_etf_holdings_asset(context)
     sentiment_library = sentiment_dataset_asset(
-        context, ishares_etf_holdings=ishares_etf_holdings
+        context, holdings_library=holdings_library
     )
 
     # Materialize the portfolio asset, passing the holdings
     portfolio_asset(
         context,
-        ishares_etf_holdings=ishares_etf_holdings,
+        holdings_library=holdings_library,
         sentiment_library=sentiment_library,
     )
 

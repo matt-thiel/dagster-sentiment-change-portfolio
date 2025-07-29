@@ -26,6 +26,9 @@ PORTFOLIO_NAME = "SentimentChangePortfolio"
 # The portfolio rebalances daily starting from 2025-01-01.
 PORTFOLIO_PARTITIONS_DEF = DailyPartitionsDefinition(start_date="2025-01-01")
 
+# The ticker of the iShares ETF to use for the portfolio.
+ETF_TICKER = "IWM"
+
 BASE_DATASET_SYMBOLS = ["sentimentNormalized", "messageVolumeNormalized"]
 FEATURE_LOOKBACK_WINDOW = 2  # Extra days of data needed to get feature value for today
 NULL_CHANGE_WINDOW = (

@@ -9,7 +9,8 @@ from dagster import asset, AssetIn, AssetExecutionContext
 from arcticdb.version_store.library import Library
 
 from dagster_pipelines.utils.sentiment_utils import get_chart_for_symbols
-from dagster_pipelines.config.constants import BASE_DATASET_SYMBOLS, EASTERN_TZ
+from dagster_pipelines.config.constants import BASE_DATASET_SYMBOLS, EASTERN_TZ, ETF_TICKER
+from dagster_pipelines.utils.ticker_utils import get_most_recent_etf_holdings
 
 # Disable too many locals due to function complexity
 # pylint: disable=too-many-locals
@@ -17,10 +18,10 @@ from dagster_pipelines.config.constants import BASE_DATASET_SYMBOLS, EASTERN_TZ
 
 @asset(
     required_resource_keys={"arctic_db"},
-    ins={"ishares_etf_holdings": AssetIn("ishares_etf_holdings_asset")},
+    ins={"holdings_library": AssetIn("ishares_etf_holdings_asset")},
 )
 def sentiment_dataset_asset(
-    context: AssetExecutionContext, ishares_etf_holdings: list[str]
+    context: AssetExecutionContext, holdings_library: Library
 ) -> Library:
     """
     Ensures sentiment datasets for the given tickers exist in ArcticDB,
@@ -28,7 +29,7 @@ def sentiment_dataset_asset(
 
     Args:
         context: Dagster asset context with ArcticDB resource.
-        ishares_etf_holdings (list[str]): List of ETF holding tickers.
+        holdings_library (Library): ArcticDB library containing ETF holdings.
 
     Returns:
         Library: ArcticDB library containing sentiment datasets.
@@ -36,6 +37,8 @@ def sentiment_dataset_asset(
     logger = context.log
     arctic_store = context.resources.arctic_db
     library_name = "sentiment_features"
+
+    ishares_etf_holdings = get_most_recent_etf_holdings(holdings_library, ETF_TICKER)
 
     # Create the library if it doesn't exist
     if library_name not in arctic_store.list_libraries():
