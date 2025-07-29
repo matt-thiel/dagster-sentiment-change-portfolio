@@ -179,8 +179,8 @@ def select_zoom(days_to_query: int) -> str:
             - 'ALL' for all available data
     """
     zooms = [
-        (1, "1D"),
-        (7, "1W"),
+        #(1, "1D"),
+        #(7, "1W"),
         (30, "1M"),
         (90, "3M"),
         (180, "6M"),

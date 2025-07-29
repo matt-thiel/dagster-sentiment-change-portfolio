@@ -33,32 +33,41 @@ def _update_base_dataset_symbol(
         add_new_columns (bool): Whether new columns will be added to the dataset.
     """
     updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
+    
 
     if add_new_columns:
         existing_symbol = arctic_library.read(symbol)
         previous_metadata = existing_symbol.metadata
         existing_dataset = existing_symbol.data
+        # Add new columns to existing dataset
         updated_dataset = updated_dataset.combine_first(existing_dataset)
         updated_dataset = updated_dataset.sort_index()
-        data_start_date = updated_dataset.index.min()
-    else:
-        previous_metadata = arctic_library.read_metadata(symbol).metadata
-        data_start_date = previous_metadata["data_start_date"]
-
-    arctic_library.update(
-        symbol=symbol,
-        data=updated_dataset,
-        metadata={
+        arctic_library.write(
+            symbol=symbol,
+            data=updated_dataset,
+            metadata={
             "date_created": previous_metadata["date_created"],
             "date_updated": current_datetime.isoformat(),
-            "data_start_date": data_start_date,
-            "data_end_date": updated_dataset.index.max(),
             "source": "StockTwits",
             "last_dagster_run_id": previous_metadata["last_dagster_run_id"],
-        },
-        upsert=True,
-        prune_previous_versions=True,
-    )
+            },
+            prune_previous_versions=True,
+        )
+    else:
+        previous_metadata = arctic_library.read_metadata(symbol).metadata
+
+        #arctic_library.update(
+        arctic_library.append(
+            symbol=symbol,
+            data=updated_dataset,
+            metadata={
+                "date_created": previous_metadata["date_created"],
+                "date_updated": current_datetime.isoformat(),
+                "source": "StockTwits",
+                "last_dagster_run_id": previous_metadata["last_dagster_run_id"],
+            },
+            prune_previous_versions=True,
+        )
 
 # Complex function needs many locals
 # pylint: disable=too-many-locals
@@ -99,42 +108,20 @@ def update_sentiment_data(
 
     missing_tickers = [ticker for ticker in tickers if ticker not in dataset_cols]
 
-    tickers_to_download = missing_tickers
-
-    if tickers_to_download:
-        logger.warning("Tickers missing from sentiment data: %s", missing_tickers)
-        logger.warning(
-            "Some tickers are not in the sentiment data or contain missing values. Downloading..."
-        )
-        updated_sentiment_df = get_chart_for_symbols(
-            symbols=tickers_to_download,
-            zoom="ALL",
-            timeout=10,
-            username=st_username,
-            password=st_password,
-            logger=logger,
-        ).select_dtypes(include=["float64", "int64"])
-        for symbol in BASE_DATASET_SYMBOLS:
-            _update_base_dataset_symbol(
-                arctic_library,
-                symbol,
-                updated_sentiment_df,
-                current_datetime,
-                add_new_columns=True,
-            )
-
-    updated_sentiment_df = None
-
     if portfolio_datetime < earliest_available_date:
         raise ValueError(
             "Requested portfolio date is before earliest available sentiment date."
         )
     if portfolio_datetime > last_available_date:
-        logger.warning("No exisiting sentiment data for %s.", portfolio_datetime)
-        timedelta_to_last = (current_datetime.date() - last_available_date).days
+        timedelta_to_last = (current_datetime - last_available_date).days
+        if timedelta_to_last < 1:
+            logger.warning("Cannot update with today's date because it is before market close.")
+            return
+        logger.warning("No recent sentiment data for %s, updating...", portfolio_datetime)
         zoom_param = select_zoom(timedelta_to_last + FEATURE_LOOKBACK_WINDOW)
 
-        update_tickers = list(set(tickers) | set(dataset_cols))
+        # Only update what is in the dataset because anything missing will be downloaded in the next step
+        update_tickers = dataset_cols
 
         updated_sentiment_df = get_chart_for_symbols(
             symbols=update_tickers,
@@ -144,10 +131,13 @@ def update_sentiment_data(
             password=st_password,
             logger=logger,
         ).select_dtypes(include=["float64", "int64"])
-    else:
-        logger.info("Using exisiting sentiment data for %s.", portfolio_datetime)
 
-    if updated_sentiment_df is not None:
+        # Only pass new data to the updater helper
+        updated_sentiment_df = updated_sentiment_df[
+            (updated_sentiment_df.index > last_available_date) &
+            (updated_sentiment_df.index < current_datetime)
+        ]
+
         for symbol in BASE_DATASET_SYMBOLS:
             _update_base_dataset_symbol(
                 arctic_library,
@@ -157,7 +147,36 @@ def update_sentiment_data(
                 add_new_columns=False,
             )
     else:
-        logger.info("Data is available for %s.", portfolio_datetime)
+        logger.info("Data is current for %s.", portfolio_datetime)
+
+    if missing_tickers:
+        logger.warning("Tickers missing from sentiment data: %s", missing_tickers)
+        logger.warning("Downloading new tickers...")
+
+        updated_sentiment_df = get_chart_for_symbols(
+            symbols=missing_tickers,
+            zoom="ALL",
+            timeout=10,
+            username=st_username,
+            password=st_password,
+            logger=logger,
+        ).select_dtypes(include=["float64", "int64"])
+
+
+
+        updated_sentiment_df = updated_sentiment_df[
+            (updated_sentiment_df.index < current_datetime)
+        ]
+
+
+        for symbol in BASE_DATASET_SYMBOLS:
+            _update_base_dataset_symbol(
+                arctic_library,
+                symbol,
+                updated_sentiment_df,
+                current_datetime,
+                add_new_columns=True,
+            )
 
     # Check datase fragmentation
     for symbol in BASE_DATASET_SYMBOLS:

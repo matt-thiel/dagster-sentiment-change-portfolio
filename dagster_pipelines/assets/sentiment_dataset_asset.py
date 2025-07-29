@@ -65,11 +65,13 @@ def sentiment_dataset_asset(
         ).select_dtypes(include=["float64", "int64"])
 
         current_time = datetime.now(EASTERN_TZ)
+
+        # Select only data before the current time
+        sentiment_features = sentiment_features[sentiment_features.index < current_time]
+
         metadata = {
             "date_created": current_time.isoformat(),
             "date_updated": current_time.isoformat(),
-            "data_start_date": sentiment_features.index.min(),
-            "data_end_date": sentiment_features.index.max(),
             "source": "StockTwits",
             "last_dagster_run_id": getattr(context, "run_id", None),
         }

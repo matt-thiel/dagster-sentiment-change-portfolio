@@ -104,6 +104,7 @@ def produce_portfolio(
             tickers=tickers,
             lag_periods=1,
             change_period=1,
+            remove_null_changes=True,
         )
 
         closest_date = df_sentiment_feature.index.asof(portfolio_datetime)
@@ -128,6 +129,9 @@ def produce_portfolio(
         long_mask = []
         short_mask = []
         for _, feature_df in feature_dfs.items():
+            if ticker not in feature_df.index:
+                signals.append((ticker, np.nan))
+                continue
             long_mask.append(feature_df.loc[ticker] == 10)
             short_mask.append(feature_df.loc[ticker] == 1)
         if all(long_mask):

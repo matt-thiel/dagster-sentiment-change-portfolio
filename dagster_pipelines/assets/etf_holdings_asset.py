@@ -2,7 +2,11 @@
 Fetches and stores the holdings for a specified iShares ETF in ArcticDB.
 """
 
+from datetime import datetime
+
 from dagster import asset, AssetExecutionContext
+from dagster_pipelines.config.constants import EASTERN_TZ
+from dagster_pipelines.utils.datetime_utils import ensure_timezone
 from dagster_pipelines.utils.ticker_utils import get_ishares_etf_tickers
 
 
@@ -19,6 +23,8 @@ def ishares_etf_holdings_asset(context: AssetExecutionContext) -> list[str]:
     """
     arctic_store = context.resources.arctic_db
     partition_date = context.asset_partition_key_for_output()
+    partition_date = datetime.strptime(partition_date, "%Y-%m-%d")
+    partition_date = ensure_timezone(partition_date, EASTERN_TZ)
     library_name = "holdings"
     etf_ticker = "IWM"
     logger = context.log
@@ -35,4 +41,4 @@ def ishares_etf_holdings_asset(context: AssetExecutionContext) -> list[str]:
         logger.error(f"Error creating library, check that S3 bucket exists: {e}")
         raise e
 
-    return holdings[:25]
+    return holdings[:20]

@@ -42,6 +42,7 @@ def get_ishares_etf_tickers(
         Exception: If there are issues reading from or writing to ArcticDB.
     """
     download_url = ISHARES_ETF_URLS.get(etf_ticker)
+
     if download_url is None:
         raise ValueError(f"No download URL found for {etf_ticker}")
 
@@ -60,8 +61,14 @@ def get_ishares_etf_tickers(
                 last_as_of_dt,
             )
         else:
-            last_row = latest_record.data.iloc[-1]
-            return last_row[last_row.notna()].index.tolist()
+            valid_rows = latest_record.data[latest_record.data.index <= partition_date]
+            if len(valid_rows) == 0:
+                logger.warning("Portfolio date is before first as-of date for universe. Most recent universe will be used.")
+                holdings_row = latest_record.data.iloc[-1]
+            else:
+                holdings_row = valid_rows.iloc[-1]
+                logger.info("Using universe as of %s", holdings_row.name)
+            return holdings_row[holdings_row.notna()].index.tolist()
 
     except ArcticNativeException:
         logger.warning(
@@ -129,21 +136,34 @@ def get_ishares_etf_tickers(
         len(holdings_df),
     )
 
-
-
     # Store in ArcticDB
     symbol_name = f"{etf_ticker}_holdings"
     current_time = datetime.now(EASTERN_TZ)
-    
-    arctic_library.update(symbol=symbol_name,
+
+    new_metadata = {"source": "iShares",
+                    "etf_ticker": etf_ticker,
+                    "last_updated": current_time.isoformat()}
+
+    if not arctic_library.has_symbol(symbol_name):
+        arctic_library.write(symbol=symbol_name,
                             data=output_df,
-                            upsert=True,
-                            metadata={
-                                "source": "iShares",
-                                "etf_ticker": etf_ticker,
-                                "last_updated": current_time.isoformat()},
+                            metadata=new_metadata,
                             prune_previous_versions=True)
+    else:
+        arctic_library.append(symbol=symbol_name,
+                                data=output_df,
+                                metadata=new_metadata,
+                                prune_previous_versions=True)
 
     logger.info("Stored %s holdings in ArcticDB as '%s'", etf_ticker, symbol_name)
 
-    return cleaned_tickers
+    latest_record = arctic_library.read(f"{etf_ticker}_holdings")
+
+    valid_rows = latest_record.data[latest_record.data.index <= partition_date]
+    if len(valid_rows) == 0:
+        logger.warning("Portfolio date is before first as-of date for universe. Most recent universe will be used.")
+        holdings_row = latest_record.data.iloc[-1]
+    else:
+        holdings_row = valid_rows.iloc[-1]
+        logger.info("Using universe as of %s", holdings_row.name)
+    return holdings_row[holdings_row.notna()].index.tolist()

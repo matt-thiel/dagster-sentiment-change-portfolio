@@ -119,6 +119,7 @@ def debug_portfolio(date_str: str | None = None) -> None:
     Args:
         date_str: Optional date string in YYYY-MM-DD format. If None, uses today's date.
     """
+
     # Use provided date or today's date.
     partition_date = date_str or datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
 
