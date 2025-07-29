@@ -141,6 +141,7 @@ def get_chart_for_symbols(
         except (HTTPError, JSONDecodeError, ConnectionError, Timeout, ValueError) as e:
             logger.error("Error fetching data for %s: %s", symbol, e)
             continue
+        # Add a small delay to avoid rate limiting
         time.sleep(0.1)
 
     if not dfs:

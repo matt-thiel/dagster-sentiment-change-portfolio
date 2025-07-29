@@ -61,6 +61,7 @@ def get_sentiment_change_feature(
             f"Not enough trading days in the date range for {sentiment_symbol} and {partition_date}"
         )
 
+    # Read only necessary subset of data for feature calculation
     data_read = arctic_library.read(
         symbol=sentiment_symbol,
         date_range=date_range,

@@ -32,8 +32,9 @@ def ishares_etf_holdings_asset(context: AssetExecutionContext) -> list[str]:
         # Create the library if it doesn't exist
         if library_name not in arctic_store.list_libraries():
             arctic_store.create_library(library_name)
-        # Get the library
+
         arctic_library = arctic_store[library_name]
+        # Downloads holdings if needed and returns a list of the current universe
         holdings = get_ishares_etf_tickers(
             etf_ticker, partition_date, arctic_library, logger
         )

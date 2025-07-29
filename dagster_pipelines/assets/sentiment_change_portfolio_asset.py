@@ -88,6 +88,7 @@ def portfolio_asset(
     context.log.info("Starting portfolio generation for %s", partition_date)
 
     try:
+        # Update sentiment data if tickers are missing or data is out of date
         update_sentiment_data(
             sentiment_library,
             tickers=ishares_etf_holdings,

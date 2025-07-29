@@ -107,6 +107,7 @@ def produce_portfolio(
             remove_null_changes=True,
         )
 
+        # get the nearest date before the portfolio date
         closest_date = df_sentiment_feature.index.asof(portfolio_datetime)
         logger.info(
             "Portfolio date: %s \nFeature date: %s", portfolio_datetime, closest_date
@@ -120,11 +121,13 @@ def produce_portfolio(
                 portfolio_datetime,
             )
 
+        # Calculate feature deciles
         df_feature = todays_sentiment.rank(method="first")
         feature_dfs[feature_name] = (
             pd.qcut(df_feature, 10, labels=False, duplicates="raise") + 1
         )
 
+    # Create trade signals for each ticker
     for ticker in tickers:
         long_mask = []
         short_mask = []
@@ -141,7 +144,6 @@ def produce_portfolio(
         else:
             signals.append((ticker, np.nan))
 
-    # equal weight the signals
     position_df = pd.DataFrame(signals, columns=["sym", "wt"])
 
     # Count valid positions

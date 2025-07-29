@@ -18,6 +18,7 @@ from dagster_pipelines.config.constants import (
     FEATURE_LOOKBACK_WINDOW,
 )
 
+
 # Requires many arguments for update flexibility
 # pylint: disable=too-many-arguments
 def _download_and_update_sentiment_data(
@@ -45,6 +46,7 @@ def _download_and_update_sentiment_data(
     st_username = os.environ["STOCKTWITS_USERNAME"]
     st_password = os.environ["STOCKTWITS_PASSWORD"]
 
+    # Download sentiment data for given tickers
     updated_sentiment_df = get_chart_for_symbols(
         symbols=tickers,
         zoom=zoom,
@@ -55,15 +57,18 @@ def _download_and_update_sentiment_data(
     ).select_dtypes(include=["float64", "int64"])
 
     if add_new_columns:
+        # If adding new tickers, get all data before current time
         updated_sentiment_df = updated_sentiment_df[
             (updated_sentiment_df.index < current_datetime)
         ]
     else:
+        # If updating existing tickers, filter out existing data
         updated_sentiment_df = updated_sentiment_df[
             (updated_sentiment_df.index > last_available_datetime)
             & (updated_sentiment_df.index < current_datetime)
         ]
 
+    # Updates data for both sentiment and message volume
     for symbol in BASE_DATASET_SYMBOLS:
         _update_base_dataset_symbol(
             arctic_library,
@@ -93,6 +98,7 @@ def _update_base_dataset_symbol(
     """
     updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
 
+    # If adding new tickers, we need to combine the existing dataset with the new data
     if add_new_columns:
         existing_symbol = arctic_library.read(symbol)
         previous_metadata = existing_symbol.metadata
@@ -147,6 +153,7 @@ def update_sentiment_data(
     if not arctic_library.has_symbol("sentimentNormalized"):
         raise ValueError("sentimentNormalized dataset not found in ArcticDB")
 
+    # Get head and tail for earliest and latest dates and existing tickers
     symbol_head = arctic_library.head("sentimentNormalized", n=1, columns=[]).data
     symbol_tail = arctic_library.tail("sentimentNormalized", n=1).data
     earliest_available_date = symbol_head.index.min()
@@ -171,6 +178,7 @@ def update_sentiment_data(
         logger.warning(
             "No recent sentiment data for %s, updating...", portfolio_datetime
         )
+        # Select lookback window to only download what is needed
         zoom_param = select_zoom(timedelta_to_last + FEATURE_LOOKBACK_WINDOW)
 
         # Only update existing, missing tickers are added in next step

@@ -43,9 +43,9 @@ def sentiment_dataset_asset(
     # Get the library
     arctic_library = arctic_store[library_name]
 
+    # Get StockTwits credentials
     st_username = os.environ["STOCKTWITS_USERNAME"]
     st_password = os.environ["STOCKTWITS_PASSWORD"]
-    sentiment_features = None
 
     # Code similar to sentiment updater, disable warning
     # pylint: disable=duplicate-code

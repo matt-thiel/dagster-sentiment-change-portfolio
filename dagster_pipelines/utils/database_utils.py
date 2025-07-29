@@ -118,6 +118,12 @@ def print_arcticdb_symbol(
 ) -> None:
     """
     Print the dataframe info for a given symbol in ArcticDB.
+
+    Args:
+        symbol (str): The symbol to print the dataframe info for.
+        library (str): The library to read the symbol from.
+        arctic_object (object): The ArcticDB object to read the symbol from.
+        logger (object): Logger object for logging messages and warnings.
     """
     try:
         symbol_data = arctic_object[library].read(symbol)
@@ -137,6 +143,16 @@ def arctic_db_write_or_append(
 ) -> None:
     """
     Write data to ArcticDB if the symbol does not exist, otherwise append to the exisitng symbol.
+
+    Args:
+        symbol (str): The symbol to write or append to.
+        arctic_library (object): ArcticDB library instance.
+        data (pd.DataFrame): The data to write or append.
+        metadata (dict): The metadata to write or append.
+        prune_previous_versions (bool): Whether to prune previous versions.
+
+    Returns:
+        None
     """
     if arctic_library.has_symbol(symbol):
         arctic_library.append(

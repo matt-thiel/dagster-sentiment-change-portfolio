@@ -53,7 +53,9 @@ def _download_ishares_etf_holdings(
         & (holdings_df.index != "-")
     ]
     # Remove duplicate tickers
-    valid_equity_df = valid_equity_df.loc[~valid_equity_df.index.duplicated(keep="first")]
+    valid_equity_df = valid_equity_df.loc[
+        ~valid_equity_df.index.duplicated(keep="first")
+    ]
 
     # Log non-equity and undefined holdings
     num_invalid_holdings = len(holdings_df) - len(valid_equity_df)
@@ -114,10 +116,12 @@ def get_ishares_etf_tickers(
         raise ValueError(f"No download URL found for {etf_ticker}")
 
     if arctic_library.has_symbol(symbol_name):
+        # Use tail to get last as of date for update checking
         latest_record = arctic_library.tail(symbol_name, n=1, columns=[])
         last_as_of_dt = latest_record.data.index[-1]
         last_as_of_dt = ensure_timezone(last_as_of_dt, EASTERN_TZ)
 
+        # Update universe every ~2 months in case of constituent changes
         if (current_time - last_as_of_dt) >= timedelta(days=60):
             logger.warning(
                 "Data for %s is stale (last_as_of_date: %s). Redownloading...",
@@ -153,6 +157,7 @@ def get_ishares_etf_tickers(
 
         logger.info("Stored %s holdings in ArcticDB as '%s'", etf_ticker, symbol_name)
 
+    # Need to load the full universe data to query the correct date for the portfolio
     latest_record = arctic_library.read(f"{etf_ticker}_holdings")
 
     valid_rows = latest_record.data[latest_record.data.index <= partition_date]
@@ -164,4 +169,5 @@ def get_ishares_etf_tickers(
     else:
         holdings_row = valid_rows.iloc[-1]
         logger.info("Using universe as of %s", holdings_row.name)
+
     return holdings_row[holdings_row.notna()].index.tolist()
