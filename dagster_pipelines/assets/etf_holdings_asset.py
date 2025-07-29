@@ -21,9 +21,6 @@ def ishares_etf_holdings_asset(context: AssetExecutionContext) -> Library:
         Library: ArcticDB library containing ETF holdings.
     """
     arctic_store = context.resources.arctic_db
-    # partition_date = context.asset_partition_key_for_output()
-    # partition_date = datetime.strptime(partition_date, "%Y-%m-%d")
-    # partition_date = ensure_timezone(partition_date, EASTERN_TZ)
     library_name = "holdings"
     logger = context.log
     try:
@@ -33,14 +30,10 @@ def ishares_etf_holdings_asset(context: AssetExecutionContext) -> Library:
 
         arctic_library = arctic_store[library_name]
         # Downloads holdings if needed and returns a list of the current universe
-        # holdings = initialize_ishares_etf_holdings(
-        #    etf_ticker, arctic_library, logger
-        # )
         initialize_ishares_etf_holdings(ETF_TICKER, arctic_library, logger)
 
     except Exception as e:
         logger.error(f"Error creating library, check that S3 bucket exists: {e}")
         raise e
 
-    # return holdings
     return arctic_library

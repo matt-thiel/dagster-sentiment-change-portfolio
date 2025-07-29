@@ -126,9 +126,7 @@ def initialize_ishares_etf_holdings(
 
     if arctic_library.has_symbol(symbol_name):
         logger.info("iShares ETF holdings library already exists for %s", etf_ticker)
-        # latest_record = arctic_library.tail(symbol_name, n=1, columns=None).data
     else:
-
         logger.info("Downloading %s holdings from iShares...", etf_ticker)
         latest_record = _download_ishares_etf_holdings(etf_ticker, logger, timeout)
 
@@ -148,10 +146,6 @@ def initialize_ishares_etf_holdings(
         )
 
         logger.info("Stored %s holdings in ArcticDB as '%s'", etf_ticker, symbol_name)
-
-    # holdings_row = latest_record.iloc[-1]
-    # return holdings_row[holdings_row.notna()].index.tolist()
-    # return arctic_library[symbol_name]
 
 
 def _check_if_stale_holdings(
