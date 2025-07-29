@@ -140,6 +140,7 @@ def arctic_db_write_or_append(
     data: pd.DataFrame,
     metadata: dict,
     prune_previous_versions: bool = True,
+    force_write: bool = False,
 ) -> None:
     """
     Write data to ArcticDB if the symbol does not exist, otherwise append to the exisitng symbol.
@@ -150,11 +151,11 @@ def arctic_db_write_or_append(
         data (pd.DataFrame): The data to write or append.
         metadata (dict): The metadata to write or append.
         prune_previous_versions (bool): Whether to prune previous versions.
-
+        force_write (bool): Whether to write the symbol even if it already exists.
     Returns:
         None
     """
-    if arctic_library.has_symbol(symbol):
+    if arctic_library.has_symbol(symbol) and not force_write:
         arctic_library.append(
             symbol=symbol,
             data=data,

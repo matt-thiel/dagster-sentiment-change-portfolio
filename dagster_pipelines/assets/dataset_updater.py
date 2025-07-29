@@ -122,6 +122,7 @@ def _update_base_dataset_symbol(
         data=updated_dataset,
         metadata=new_metadata,
         prune_previous_versions=True,
+        force_write=add_new_columns, # Overwrite existing with combined dataset
     )
 
 
@@ -199,7 +200,7 @@ def update_sentiment_data(
         _download_and_update_sentiment_data(
             arctic_library=arctic_library,
             tickers=missing_tickers,
-            zoom=zoom_param,
+            zoom="ALL",
             last_available_datetime=last_available_date,
             current_datetime=current_datetime,
             logger=logger,
