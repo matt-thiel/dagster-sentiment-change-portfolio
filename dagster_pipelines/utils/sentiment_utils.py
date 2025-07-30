@@ -183,6 +183,7 @@ def select_zoom(days_to_query: int) -> str:
     """
     zooms = [
         # (1, "1D"),
+        (2, "1D"),
         # (7, "1W"),
         (30, "1M"),
         (90, "3M"),

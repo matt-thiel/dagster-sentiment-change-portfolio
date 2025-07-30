@@ -16,7 +16,6 @@ from dagster_pipelines.utils.datetime_utils import ensure_timezone
 from dagster_pipelines.config.constants import (
     EASTERN_TZ,
     BASE_DATASET_SYMBOLS,
-    FEATURE_LOOKBACK_WINDOW,
 )
 
 
@@ -56,6 +55,11 @@ def _download_and_update_sentiment_data(
         password=st_password,
         logger=logger,
     ).select_dtypes(include=["float64", "int64"])
+
+    # If updating with 1D zoom, we only want the sentiment at market close
+    if zoom == "1D":
+        market_close = pd.Timestamp('16:00:00').tz_localize(EASTERN_TZ).time()
+        updated_sentiment_df = updated_sentiment_df[updated_sentiment_df.index.time == market_close]
 
     if add_new_columns:
         # If adding new tickers, get all data before current time
@@ -182,7 +186,7 @@ def update_sentiment_data(
             "No recent sentiment data for %s, updating...", portfolio_datetime
         )
         # Select lookback window to only download what is needed
-        zoom_param = select_zoom(timedelta_to_last + FEATURE_LOOKBACK_WINDOW)
+        zoom_param = select_zoom(timedelta_to_last)
 
         # Only update existing, missing tickers are added in next step
         _download_and_update_sentiment_data(
