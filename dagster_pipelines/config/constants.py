@@ -4,6 +4,7 @@ Constants for the project.
 
 import pytz
 from dagster import DailyPartitionsDefinition
+from arcticdb import LibraryOptions
 
 EASTERN_TZ = pytz.timezone("America/New_York")
 
@@ -34,3 +35,6 @@ FEATURE_LOOKBACK_WINDOW = 2  # Extra days of data needed to get feature value fo
 NULL_CHANGE_WINDOW = (
     20  # Number of days to look back for finding low sentiment change stocks
 )
+
+# Default library options for ArcticDB.
+DEFAULT_LIBRARY_OPTIONS = LibraryOptions(dynamic_schema=True, dedup=True)

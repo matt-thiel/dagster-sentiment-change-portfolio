@@ -13,6 +13,7 @@ from dagster_pipelines.config.constants import (
     BASE_DATASET_SYMBOLS,
     EASTERN_TZ,
     ETF_TICKER,
+    DEFAULT_LIBRARY_OPTIONS,
 )
 from dagster_pipelines.utils.ticker_utils import get_most_recent_etf_holdings
 
@@ -46,7 +47,7 @@ def sentiment_dataset_asset(
 
     # Create the library if it doesn't exist
     if library_name not in arctic_store.list_libraries():
-        arctic_store.create_library(library_name)
+        arctic_store.create_library(library_name, library_options=DEFAULT_LIBRARY_OPTIONS)
     # Get the library
     arctic_library = arctic_store[library_name]
 

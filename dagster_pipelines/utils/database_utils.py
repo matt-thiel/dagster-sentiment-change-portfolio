@@ -171,3 +171,80 @@ def arctic_db_write_or_append(
             metadata=metadata,
             prune_previous_versions=prune_previous_versions,
         )
+
+
+# Needs many arguments for flexibility.
+# pylint: disable=too-many-arguments
+def arctic_db_batch_update(
+    symbol: str,
+    arctic_library: object,
+    new_data: pd.DataFrame,
+    new_metadata: dict,
+    logger: object,
+    batch_size: int = 100,
+    prune_previous_versions: bool = True,
+    allow_mismatched_indices: bool = False,
+) -> None:
+    """
+    Batch update a symbol in ArcticDB.
+
+    Args:
+        symbol (str): The symbol to update.
+        arctic_library (object): ArcticDB library instance.
+        new_data (pd.DataFrame): The new data to update symbol with.
+        new_metadata (dict): The new metadata to update symbol with.
+        logger (object): Logger object for logging messages and warnings.
+        batch_size (int): Number of rows for each batch
+        prune_previous_versions (bool): Whether to prune previous symbol versions.
+        allow_mismatched_indices (bool): If true, add mismatched rows to existing data.
+    """
+
+    batch_start = 0
+    rows_to_update = len(new_data)
+    while batch_start < rows_to_update:
+        batch = new_data.iloc[batch_start : batch_start + batch_size]
+        date_range = batch.index[[0, -1]]
+        existing_batch = arctic_library.read(symbol, date_range=date_range).data
+        if not batch.index.equals(existing_batch.index):
+            if not allow_mismatched_indices:
+                logger.warning(
+                    "Index mismatch between update batch and exisiting data. "
+                    "Rows not in original data will be dropped."
+                )
+                logger.info(
+                    "Mismatch occured between %s and %s in new data.",
+                    date_range[0],
+                    date_range[-1],
+                )
+            else:
+                logger.warning(
+                    "Index mismatch between update batch and exisiting data. "
+                    "Rows not in original data will be added."
+                )
+                logger.info(
+                    "Mismatch occured between %s and %s in new data.",
+                    date_range[0],
+                    date_range[-1],
+                )
+
+        if allow_mismatched_indices:
+            # Overwrites exsiting with batch and adds new rows/columns.
+            update_df = batch.combine_first(existing_batch)
+        else:
+            # assign() efficiently handles both updating existing columns and adding new ones
+            update_df = existing_batch.assign(**batch)
+
+        batch_start += batch_size
+
+        # Only update metadata on last batch for efficiency
+        if batch_start >= rows_to_update:
+            arctic_library.update(
+                symbol,
+                update_df,
+                metadata=new_metadata,
+                prune_previous_versions=prune_previous_versions,
+            )
+        else:
+            arctic_library.update(
+                symbol, update_df, prune_previous_versions=prune_previous_versions
+            )

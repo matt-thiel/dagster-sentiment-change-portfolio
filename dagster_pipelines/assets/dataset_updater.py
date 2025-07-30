@@ -8,6 +8,7 @@ import pandas as pd
 
 from dagster_pipelines.utils.database_utils import (
     arctic_db_write_or_append,
+    arctic_db_batch_update,
     check_db_fragmentation,
 )
 from dagster_pipelines.utils.sentiment_utils import get_chart_for_symbols, select_zoom
@@ -75,15 +76,18 @@ def _download_and_update_sentiment_data(
             symbol,
             updated_sentiment_df,
             current_datetime,
+            logger,
             add_new_columns=add_new_columns,
         )
 
-
+# Needs many arguments for flexibility
+# pylint: disable=too-many-arguments
 def _update_base_dataset_symbol(
     arctic_library: object,
     symbol: str,
     updated_sentiment_df: pd.DataFrame,
     current_datetime: datetime,
+    logger: object,
     add_new_columns: bool = False,
 ) -> None:
     """
@@ -97,17 +101,7 @@ def _update_base_dataset_symbol(
         add_new_columns (bool): Whether new columns will be added to the dataset.
     """
     updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
-
-    # If adding new tickers, we need to combine the existing dataset with the new data
-    if add_new_columns:
-        existing_symbol = arctic_library.read(symbol)
-        previous_metadata = existing_symbol.metadata
-        existing_dataset = existing_symbol.data
-        # Add new columns to existing dataset
-        updated_dataset = updated_dataset.combine_first(existing_dataset)
-        updated_dataset = updated_dataset.sort_index()
-    else:
-        previous_metadata = arctic_library.read_metadata(symbol).metadata
+    previous_metadata = arctic_library.read_metadata(symbol).metadata
 
     new_metadata = {
         "date_created": previous_metadata["date_created"],
@@ -116,14 +110,25 @@ def _update_base_dataset_symbol(
         "last_dagster_run_id": previous_metadata["last_dagster_run_id"],
     }
 
-    arctic_db_write_or_append(
-        symbol=symbol,
-        arctic_library=arctic_library,
-        data=updated_dataset,
-        metadata=new_metadata,
-        prune_previous_versions=True,
-        force_write=add_new_columns,  # Overwrite existing with combined dataset
-    )
+    # If adding new tickers, we need to combine the existing dataset with the new data
+    if add_new_columns:
+        arctic_db_batch_update(
+            symbol=symbol,
+            arctic_library=arctic_library,
+            new_data=updated_dataset,
+            new_metadata=new_metadata,
+            logger=logger,
+            prune_previous_versions=True,
+            allow_mismatched_indices=False, # Don't add mismatched rows to existing data
+        )
+    else:
+        arctic_db_write_or_append(
+            symbol=symbol,
+            arctic_library=arctic_library,
+            data=updated_dataset,
+            metadata=new_metadata,
+            prune_previous_versions=True,
+        )
 
 
 # Complex function needs many locals
@@ -159,6 +164,7 @@ def update_sentiment_data(
     symbol_tail = arctic_library.tail("sentimentNormalized", n=1).data
     earliest_available_date = symbol_head.index.min()
     last_available_date = symbol_tail.index.max()
+    timedelta_to_last = (current_datetime - last_available_date).days
 
     dataset_cols = symbol_tail.columns.tolist()
 
@@ -169,13 +175,9 @@ def update_sentiment_data(
             "Requested portfolio date is before earliest available sentiment date."
         )
 
-    if portfolio_datetime > last_available_date:
-        timedelta_to_last = (current_datetime - last_available_date).days
-        if timedelta_to_last < 1:
-            logger.warning(
-                "Cannot update with today's date because it is before market close."
-            )
-            return
+    # Update dataset with current data regardless of portfolio date.
+    if timedelta_to_last >= 1:
+        # If more than 1 day since last update, update all data
         logger.warning(
             "No recent sentiment data for %s, updating...", portfolio_datetime
         )
@@ -192,6 +194,10 @@ def update_sentiment_data(
             logger=logger,
             add_new_columns=False,
         )
+    else:
+        logger.warning(
+                "Cannot update with today's date because it is before market close."
+            )
 
     if missing_tickers:
         logger.warning("Tickers missing from sentiment data: %s", missing_tickers)
