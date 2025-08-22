@@ -12,20 +12,18 @@ from dagster_pipelines.utils.sentiment_utils import get_chart_for_symbols
 from dagster_pipelines.config.constants import (
     BASE_DATASET_SYMBOLS,
     EASTERN_TZ,
-    ETF_TICKER,
     DEFAULT_LIBRARY_OPTIONS,
 )
-from dagster_pipelines.utils.ticker_utils import get_most_recent_etf_holdings
+from dagster_pipelines.utils.ticker_utils import get_most_recent_etf_holdings, initialize_ishares_etf_holdings
+from dagster_pipelines.assets.dataset_updater import update_sentiment_data
 
 # Disable too many locals due to function complexity
 # pylint: disable=too-many-locals
-
-
 @asset(
     required_resource_keys={"arctic_db"},
     ins={"holdings_library": AssetIn("ishares_etf_holdings_asset")},
 )
-def sentiment_dataset_asset(
+def r3000_sentiment_dataset_asset(
     context: AssetExecutionContext, holdings_library: Library
 ) -> Library:
     """
@@ -42,8 +40,13 @@ def sentiment_dataset_asset(
     logger = context.log
     arctic_store = context.resources.arctic_db
     library_name = "sentiment_features"
+    ETF_ticker = "IWV" # Use Russell 3000
 
-    ishares_etf_holdings = get_most_recent_etf_holdings(holdings_library, ETF_TICKER)
+    # Ensure holdings exist for IWV
+    logger.info("Ensuring holdings exist for IWV...")
+    initialize_ishares_etf_holdings(ETF_ticker, holdings_library, logger)
+
+    ishares_etf_holdings = get_most_recent_etf_holdings(holdings_library, ETF_ticker)
 
     # Create the library if it doesn't exist
     if library_name not in arctic_store.list_libraries():
@@ -54,6 +57,8 @@ def sentiment_dataset_asset(
     # Get StockTwits credentials
     st_username = os.environ["STOCKTWITS_USERNAME"]
     st_password = os.environ["STOCKTWITS_PASSWORD"]
+
+    current_time = datetime.now(EASTERN_TZ)
 
     # Code similar to sentiment updater, disable warning
     # pylint: disable=duplicate-code
@@ -68,8 +73,6 @@ def sentiment_dataset_asset(
             logger=logger,
         ).select_dtypes(include=["float64", "int64"])
 
-        current_time = datetime.now(EASTERN_TZ)
-
         # Select only data before the current time
         sentiment_features = sentiment_features[sentiment_features.index < current_time]
 
@@ -82,5 +85,15 @@ def sentiment_dataset_asset(
         for symbol in BASE_DATASET_SYMBOLS:
             dataset = sentiment_features.xs(symbol, axis=1, level=1)
             arctic_library.write(symbol, dataset, metadata=metadata)
+    # Libraries already exist for sentiment data, check for updates
+    else:
+        logger.info("Dataset already exists in ArcticDB. Checking for updates...")
+
+        update_sentiment_data(
+            arctic_library=arctic_library,
+            tickers=ishares_etf_holdings,
+            logger=logger,
+            portfolio_date=current_time.strftime("%Y-%m-%d"),
+        )
 
     return arctic_library

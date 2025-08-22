@@ -232,7 +232,8 @@ def arctic_db_batch_update(
             update_df = batch.combine_first(existing_batch)
         else:
             # assign() efficiently handles both updating existing columns and adding new ones
-            update_df = existing_batch.assign(**batch)
+            # Create a copy to defragment the DataFrame and avoid performance warnings
+            update_df = existing_batch.copy().assign(**batch)
 
         batch_start += batch_size
 

@@ -16,6 +16,8 @@ from dagster_pipelines.utils.datetime_utils import ensure_timezone
 from dagster_pipelines.config.constants import (
     EASTERN_TZ,
     BASE_DATASET_SYMBOLS,
+    OUTPUT_DIR,
+    TMP_OUTPUT_DIR,
 )
 
 
@@ -50,11 +52,35 @@ def _download_and_update_sentiment_data(
     updated_sentiment_df = get_chart_for_symbols(
         symbols=tickers,
         zoom=zoom,
-        timeout=10,
+        timeout=50,
         username=st_username,
         password=st_password,
         logger=logger,
     ).select_dtypes(include=["float64", "int64"])
+ 
+    # Save export sentiment dataset CSV.
+    # Convert the dataset to a long CSV with the timestamp index preserved
+    # and the columns: t, sym, metric, value
+    os.makedirs(
+        TMP_OUTPUT_DIR,
+        exist_ok=True
+    )
+    os.makedirs(
+        OUTPUT_DIR,
+        exist_ok=True
+    )
+
+    sentiment_features_long = updated_sentiment_df.stack(level=[0, 1], future_stack=True).reset_index()
+    sentiment_features_long.columns = ['t', 'sym', 'metric', 'value']
+    sentiment_features_long.to_csv(os.path.join(TMP_OUTPUT_DIR, "sentiment_features_long.csv"), index=False)
+    timestamp = datetime.now(EASTERN_TZ).strftime("%Y%m%d%H%M%S")
+    # Subset to the latest timestamp.
+    t_max = sentiment_features_long['t'].max()
+    sentiment_features_long_last = sentiment_features_long[sentiment_features_long['t'] == t_max]
+    sentiment_features_long_last.to_csv(
+        os.path.join(OUTPUT_DIR, f"sentiment_features_long_last_{timestamp}.csv"),
+        index=False
+    )
 
     # If updating with 1D zoom, we only want the sentiment at market close
     if zoom == "1D":

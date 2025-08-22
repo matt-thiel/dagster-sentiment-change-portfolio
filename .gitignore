@@ -12,3 +12,6 @@ venv/
 # Dagster
 .tmp_dagster_*/
 dagster_portfolio_sample.egg-info/
+
+# WSL files
+*._*

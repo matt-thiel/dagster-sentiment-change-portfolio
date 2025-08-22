@@ -7,13 +7,14 @@ data validation, deduplication, and caching mechanisms to minimize API calls.
 """
 
 from datetime import datetime, timedelta
-from io import BytesIO
+from io import BytesIO, StringIO
 import pandas as pd
+import numpy as np
 import requests
 
 from dagster_pipelines.utils.database_utils import arctic_db_write_or_append
 from dagster_pipelines.utils.datetime_utils import ensure_timezone
-from dagster_pipelines.config.constants import EASTERN_TZ, ISHARES_ETF_URLS
+from dagster_pipelines.config.constants import EASTERN_TZ, ETF_HOLDINGS_URLS
 
 
 def _download_ishares_etf_holdings(
@@ -30,7 +31,7 @@ def _download_ishares_etf_holdings(
     Returns:
         pd.DataFrame: A DataFrame of valid tickers by ETF weight.
     """
-    download_url = ISHARES_ETF_URLS.get(etf_ticker)
+    download_url = ETF_HOLDINGS_URLS.get(etf_ticker)
 
     if download_url is None:
         raise ValueError(f"No download URL found for {etf_ticker}")
@@ -76,7 +77,37 @@ def _download_ishares_etf_holdings(
         len(cleaned_tickers),
         len(holdings_df),
     )
+    return output_df
 
+def _download_spy_etf_holdings(
+    logger: object,
+    timeout: int = 30,
+) -> pd.DataFrame:
+    """
+    Downloads ETF holdings from iShares and returns a DataFrame of valid tickers by ETF weight.
+    """
+    download_url = ETF_HOLDINGS_URLS.get("SPY")
+    response = requests.get(download_url, timeout=timeout)
+    if response.status_code != 200:
+        logger.error(
+            "Failed to fetch S&P 500 constituents: %s %s",
+            response.status_code,
+            response.reason,
+        )
+        raise RuntimeError(
+            f"Failed to fetch S&P 500 consituents: {response.status_code} {response.reason}"
+        )
+
+    # Parse the HTML content using pandas.
+    tables = pd.read_html(StringIO(response.text))
+
+    # The table with S&P 500 companies is usually the first table.
+    sp_500_table = tables[0]
+    symbols = sp_500_table["Symbol"].tolist()
+    as_of_date = datetime.now(EASTERN_TZ)
+    placeholder_weights = np.full((1, len(symbols)), 1/len(symbols))
+    output_df = pd.DataFrame(placeholder_weights, columns=symbols, index=[as_of_date])
+    output_df.columns.name = "Ticker"
     return output_df
 
 
@@ -128,7 +159,10 @@ def initialize_ishares_etf_holdings(
         logger.info("iShares ETF holdings library already exists for %s", etf_ticker)
     else:
         logger.info("Downloading %s holdings from iShares...", etf_ticker)
-        latest_record = _download_ishares_etf_holdings(etf_ticker, logger, timeout)
+        if etf_ticker == "SPY":
+            latest_record = _download_spy_etf_holdings(logger, timeout)
+        else:
+            latest_record = _download_ishares_etf_holdings(etf_ticker, logger, timeout)
 
         new_metadata = {
             "source": "iShares",
@@ -195,7 +229,10 @@ def _check_if_stale_holdings(
 
     if download_data:
         logger.info("Downloading %s holdings from iShares...", etf_ticker)
-        output_df = _download_ishares_etf_holdings(etf_ticker, logger, timeout)
+        if etf_ticker == "SPY":
+            output_df = _download_spy_etf_holdings(logger, timeout)
+        else:
+            output_df = _download_ishares_etf_holdings(etf_ticker, logger, timeout)
 
         new_metadata = {
             "source": "iShares",
@@ -280,5 +317,6 @@ def get_ishares_etf_tickers(
     else:
         holdings_row = valid_rows.iloc[-1]
         logger.info("Using universe as of %s", holdings_row.name)
+
 
     return holdings_row[holdings_row.notna()].index.tolist()

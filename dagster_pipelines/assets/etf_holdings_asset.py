@@ -28,8 +28,11 @@ def ishares_etf_holdings_asset(context: AssetExecutionContext) -> Library:
             arctic_store.create_library(library_name, library_options=DEFAULT_LIBRARY_OPTIONS)
 
         arctic_library = arctic_store[library_name]
-        # Downloads holdings if needed and returns a list of the current universe
-        initialize_ishares_etf_holdings(ETF_TICKER, arctic_library, logger)
+        
+        # If running in debug mode, use the ETF ticker override.
+        etf_ticker = context.op_config.get("etf_ticker_override", ETF_TICKER)
+        # Downloads holdings if needed
+        initialize_ishares_etf_holdings(etf_ticker, arctic_library, logger)
 
     except Exception as e:
         logger.error(f"Error creating library, check that S3 bucket exists: {e}")
