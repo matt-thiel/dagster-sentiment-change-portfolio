@@ -17,7 +17,6 @@ from dagster_pipelines.config.constants import (
     EASTERN_TZ,
     BASE_DATASET_SYMBOLS,
     OUTPUT_DIR,
-    TMP_OUTPUT_DIR,
 )
 
 
@@ -61,10 +60,7 @@ def _download_and_update_sentiment_data(
     # Save export sentiment dataset CSV.
     # Convert the dataset to a long CSV with the timestamp index preserved
     # and the columns: t, sym, metric, value
-    os.makedirs(
-        TMP_OUTPUT_DIR,
-        exist_ok=True
-    )
+
     os.makedirs(
         OUTPUT_DIR,
         exist_ok=True
@@ -72,7 +68,6 @@ def _download_and_update_sentiment_data(
 
     sentiment_features_long = updated_sentiment_df.stack(level=[0, 1], future_stack=True).reset_index()
     sentiment_features_long.columns = ['t', 'sym', 'metric', 'value']
-    sentiment_features_long.to_csv(os.path.join(TMP_OUTPUT_DIR, "sentiment_features_long.csv"), index=False)
     timestamp = datetime.now(EASTERN_TZ).strftime("%Y%m%d%H%M%S")
     # Subset to the latest timestamp.
     t_max = sentiment_features_long['t'].max()

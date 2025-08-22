@@ -57,5 +57,4 @@ NULL_CHANGE_WINDOW = (
 DEFAULT_LIBRARY_OPTIONS = LibraryOptions(dynamic_schema=True, dedup=True)
 
 # Output directory for sentiment and portfolio datasets.
-TMP_OUTPUT_DIR = "tmp/vbase"
 OUTPUT_DIR = "data"
