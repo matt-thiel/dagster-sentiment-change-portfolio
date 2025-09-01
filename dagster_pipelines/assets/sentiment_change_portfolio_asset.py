@@ -16,6 +16,7 @@ from pathlib import Path
 from datetime import datetime
 from arcticdb.version_store.library import Library
 from dotenv import load_dotenv
+import pandas as pd
 
 from dagster import (
     asset,
@@ -36,11 +37,13 @@ from dagster_pipelines.assets.sentiment_change_portfolio_producer import (
 )
 from dagster_pipelines.resources import arctic_db_resource
 from dagster_pipelines.assets.etf_holdings_asset import ishares_etf_holdings_asset
-from dagster_pipelines.assets.sentiment_dataset_asset import sentiment_dataset_asset
-from dagster_pipelines.assets.R3000_sentiment_dataset_asset import r3000_sentiment_dataset_asset
+from dagster_pipelines.assets.r3000_sentiment_dataset_asset import (
+    r3000_sentiment_dataset_asset,
+)
 from dagster_pipelines.assets.dataset_updater import update_sentiment_data
 from dagster_pipelines.config.constants import PORTFOLIO_PARTITIONS_DEF, OUTPUT_DIR
 from dagster_pipelines.utils.ticker_utils import get_ishares_etf_tickers
+from dagster_pipelines.utils.sentiment_utils import save_sentiment_data
 
 
 # pylint: disable=too-many-locals
@@ -56,7 +59,7 @@ def portfolio_asset(
     context: AssetExecutionContext,
     holdings_library: Library,
     sentiment_library: Library,
-) -> None:
+) -> pd.DataFrame:
     """
     Generates and saves a portfolio for the SPY ETF for a given partition date,
       stamps it in vBase, and uploads to S3.
@@ -67,7 +70,9 @@ def portfolio_asset(
         sentiment_library (Library): ArcticDB library with sentiment data.
 
     Returns:
-        None
+        pd.DataFrame: DataFrame containing portfolio positions with columns:
+            - 'sym': Ticker symbol
+            - 'wt': Position weight (positive for long, negative for short, 0 for no position)
 
     Raises:
         ValueError: If required environment variables are missing or data is unavailable.
@@ -81,6 +86,8 @@ def portfolio_asset(
         "VBASE_COMMITMENT_SERVICE_PRIVATE_KEY",
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
+        "STOCKTWITS_USERNAME",
+        "STOCKTWITS_PASSWORD",
     ]
     for setting in required_settings:
         if setting not in os.environ:
@@ -98,6 +105,11 @@ def portfolio_asset(
         ishares_etf_holdings = get_ishares_etf_tickers(
             etf_ticker, partition_date, holdings_library, context.log
         )
+
+        # If debugging, run with a subset of the holdings
+        debug_mode = context.op_config.get("debug_mode", False)
+        if debug_mode:
+            ishares_etf_holdings = ishares_etf_holdings[:10]
 
         # Update sentiment data if tickers are missing or data is out of date
         update_sentiment_data(
@@ -121,10 +133,15 @@ def portfolio_asset(
         )
         save_path = Path(OUTPUT_DIR + f"/{etf_ticker}")
         save_path.mkdir(parents=True, exist_ok=True)
-        df_portfolio.to_csv(save_path / f"{etf_ticker}_smt_chg_pf_{partition_date}.csv", index=True)
+        df_portfolio.to_csv(
+            save_path / f"{etf_ticker}_smt_chg_pf_{partition_date}.csv", index=True
+        )
+
+        return df_portfolio
 
     except ValueError as e:
         context.log.error(str(e))
+        return pd.DataFrame()
 
 
 def debug_portfolio(date_str: str | None = None) -> None:
@@ -141,41 +158,18 @@ def debug_portfolio(date_str: str | None = None) -> None:
     # Instantiate arctic_db resource
     arctic_db = arctic_db_resource(build_init_resource_context())
 
-    '''
-    holdings_library = arctic_db['sentiment_features']
-    symbol = 'sentimentNormalized'
-
-    data = holdings_library.read(symbol).data
-    
-    # Remove the last row
-    data_without_last = data.iloc[:-1]
-    
-    # Get existing metadata
-    metadata = holdings_library.read_metadata(symbol).metadata
-    
-    # Rewrite the symbol without the last row
-    holdings_library.write(
-        symbol=symbol,
-        data=data_without_last,
-        metadata=metadata,
-        prune_previous_versions=True
-    )
-    '''
-
     for ticker in DEBUG_ETF_TICKERS:
         # Create a context for debugging.
         context = build_op_context(
-            partition_key=partition_date, 
+            partition_key=partition_date,
             resources={"arctic_db": arctic_db},
             op_config={
                 "etf_ticker_override": ticker,
-            }
+                "debug_mode": True,
+            },
         )
         # Get the holdings (call the asset function directly)
         holdings_library = ishares_etf_holdings_asset(context)
-        #sentiment_library = sentiment_dataset_asset(
-        #    context, holdings_library=holdings_library
-        #)
 
         # Use the R3000 sentiment dataset asset.
         sentiment_library = r3000_sentiment_dataset_asset(
@@ -187,6 +181,15 @@ def debug_portfolio(date_str: str | None = None) -> None:
             context,
             holdings_library=holdings_library,
             sentiment_library=sentiment_library,
+        )
+
+        # Save the sentiment data to a csv file
+        save_sentiment_data(
+            output_dir=OUTPUT_DIR + f"/{ticker}",
+            arctic_library=sentiment_library,
+            dataset_date_str=partition_date,
+            updated_sentiment_df=None,
+            logger=context.log,
         )
 
         print_arcticdb_summary(arctic_db, context.log)

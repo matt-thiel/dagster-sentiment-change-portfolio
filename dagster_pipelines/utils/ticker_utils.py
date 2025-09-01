@@ -79,6 +79,7 @@ def _download_ishares_etf_holdings(
     )
     return output_df
 
+
 def _download_spy_etf_holdings(
     logger: object,
     timeout: int = 30,
@@ -87,7 +88,14 @@ def _download_spy_etf_holdings(
     Downloads ETF holdings from iShares and returns a DataFrame of valid tickers by ETF weight.
     """
     download_url = ETF_HOLDINGS_URLS.get("SPY")
-    response = requests.get(download_url, timeout=timeout)
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+    response = requests.get(download_url, timeout=timeout, headers=headers)
     if response.status_code != 200:
         logger.error(
             "Failed to fetch S&P 500 constituents: %s %s",
@@ -105,7 +113,7 @@ def _download_spy_etf_holdings(
     sp_500_table = tables[0]
     symbols = sp_500_table["Symbol"].tolist()
     as_of_date = datetime.now(EASTERN_TZ)
-    placeholder_weights = np.full((1, len(symbols)), 1/len(symbols))
+    placeholder_weights = np.full((1, len(symbols)), 1 / len(symbols))
     output_df = pd.DataFrame(placeholder_weights, columns=symbols, index=[as_of_date])
     output_df.columns.name = "Ticker"
     return output_df
@@ -317,6 +325,5 @@ def get_ishares_etf_tickers(
     else:
         holdings_row = valid_rows.iloc[-1]
         logger.info("Using universe as of %s", holdings_row.name)
-
 
     return holdings_row[holdings_row.notna()].index.tolist()

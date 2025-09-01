@@ -2,14 +2,20 @@
 Utilities for fetching and processing sentiment data from StockTwits API.
 """
 
+import os
 import sys
 import time
+from datetime import datetime
 from json import JSONDecodeError
 from requests import HTTPError, Timeout
 from requests.auth import HTTPBasicAuth
 from tqdm import tqdm
 import pandas as pd
 import requests
+
+from dagster_pipelines.config.constants import EASTERN_TZ, OUTPUT_DIR
+from dagster_pipelines.utils.datetime_utils import get_market_day_from_date
+from dagster_pipelines.utils.database_utils import compare_files_to_timestamp
 
 STOCKTWITS_ENDPOINT = (
     "https://api-gw-prd.stocktwits.com/api-middleware/external/sentiment/v2/"
@@ -194,3 +200,88 @@ def select_zoom(days_to_query: int) -> str:
         if days_to_query <= max_days:
             return zoom
     return "ALL"
+
+
+def save_sentiment_data(
+    output_dir: str,
+    arctic_library: object,
+    dataset_date_str: str,
+    updated_sentiment_df: pd.DataFrame | None,
+    logger: object,
+    overwrite: bool = False,
+) -> None:
+    """
+    Saves sentiment data to ArcticDB.
+    """
+    now = datetime.now(EASTERN_TZ)
+    last_market_close = get_market_day_from_date(now.date())
+    # current_timestamp = datetime.now(EASTERN_TZ).strftime("%Y%m%d%H%M%S")
+    dataset_timestamp = get_market_day_from_date(dataset_date_str)
+
+    # Check if a file exists up to the hour timestamp
+    if not overwrite and compare_files_to_timestamp(
+        output_dir,
+        dataset_timestamp.strftime("%Y%m%d%H%M%S"),
+        "sentiment_features_long_last_",
+        10,
+    ):
+        logger.info("Sentiment csv dump already exists for this hour, skipping save...")
+        return
+
+    if output_dir != OUTPUT_DIR:
+        logger.warning(
+            "Passed output directory is different from OUTPUT_DIR constant. "
+            "This may cause data to be saved in multiple locations when running "
+            "the portfolio producer. To avoid this, ensure the OUTPUT_DIR "
+            "constant in constants.py is the same as the passed output directory."
+        )
+
+    if (
+        updated_sentiment_df is None
+        or last_market_close.date() != dataset_timestamp.date()
+    ):
+        logger.info(
+            "No data passed/current date does not match intended dataset date. "
+            "Saving from ArcticDB..."
+        )
+
+        # updated_sentiment_df = arctic_library.tail("sentimentNormalized", n=1).data
+        sentiment_df = arctic_library.read(
+            "sentimentNormalized", date_range=(dataset_timestamp, dataset_timestamp)
+        ).data
+        message_volume_df = arctic_library.read(
+            "messageVolumeNormalized", date_range=(dataset_timestamp, dataset_timestamp)
+        ).data
+
+        updated_sentiment_df = pd.concat(
+            [sentiment_df, message_volume_df],
+            keys=["sentimentNormalized", "messageVolumeNormalized"],
+            axis=1,
+        )
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    dataset_timestamp = dataset_timestamp.strftime("%Y%m%d%H%M%S")
+
+    sentiment_features_long = updated_sentiment_df.stack(
+        level=[0, 1], future_stack=True
+    ).reset_index()
+    sentiment_features_long.columns = ["t", "sym", "metric", "value"]
+    # Subset to the latest timestamp.
+    t_max = sentiment_features_long["t"].max()
+    sentiment_features_long_last = sentiment_features_long[
+        sentiment_features_long["t"] == t_max
+    ]
+    sentiment_features_long_last.to_csv(
+        os.path.join(
+            output_dir, f"sentiment_features_long_last_{dataset_timestamp}.csv"
+        ),
+        index=False,
+    )
+
+    logger.info(
+        "Sentiment csv dump saved to %s",
+        os.path.join(
+            output_dir, f"sentiment_features_long_last_{dataset_timestamp}.csv"
+        ),
+    )

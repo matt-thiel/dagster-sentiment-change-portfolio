@@ -25,10 +25,12 @@ def ishares_etf_holdings_asset(context: AssetExecutionContext) -> Library:
     try:
         # Create the library if it doesn't exist
         if library_name not in arctic_store.list_libraries():
-            arctic_store.create_library(library_name, library_options=DEFAULT_LIBRARY_OPTIONS)
+            arctic_store.create_library(
+                library_name, library_options=DEFAULT_LIBRARY_OPTIONS
+            )
 
         arctic_library = arctic_store[library_name]
-        
+
         # If running in debug mode, use the ETF ticker override.
         etf_ticker = context.op_config.get("etf_ticker_override", ETF_TICKER)
         # Downloads holdings if needed

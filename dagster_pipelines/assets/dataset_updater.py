@@ -11,8 +11,15 @@ from dagster_pipelines.utils.database_utils import (
     arctic_db_batch_update,
     check_db_fragmentation,
 )
-from dagster_pipelines.utils.sentiment_utils import get_chart_for_symbols, select_zoom
-from dagster_pipelines.utils.datetime_utils import ensure_timezone
+from dagster_pipelines.utils.sentiment_utils import (
+    get_chart_for_symbols,
+    select_zoom,
+    save_sentiment_data,
+)
+from dagster_pipelines.utils.datetime_utils import (
+    ensure_timezone,
+    get_market_day_from_date,
+)
 from dagster_pipelines.config.constants import (
     EASTERN_TZ,
     BASE_DATASET_SYMBOLS,
@@ -28,8 +35,10 @@ def _download_and_update_sentiment_data(
     zoom: str,
     last_available_datetime: datetime,
     current_datetime: datetime,
+    dataset_date_str: str,
     logger: object,
     add_new_columns: bool = False,
+    sentiment_dump_dir: str = OUTPUT_DIR,
 ) -> None:
     """
     Download and update sentiment data for a list of tickers.
@@ -56,31 +65,26 @@ def _download_and_update_sentiment_data(
         password=st_password,
         logger=logger,
     ).select_dtypes(include=["float64", "int64"])
- 
+
     # Save export sentiment dataset CSV.
     # Convert the dataset to a long CSV with the timestamp index preserved
     # and the columns: t, sym, metric, value
 
-    os.makedirs(
-        OUTPUT_DIR,
-        exist_ok=True
-    )
-
-    sentiment_features_long = updated_sentiment_df.stack(level=[0, 1], future_stack=True).reset_index()
-    sentiment_features_long.columns = ['t', 'sym', 'metric', 'value']
-    timestamp = datetime.now(EASTERN_TZ).strftime("%Y%m%d%H%M%S")
-    # Subset to the latest timestamp.
-    t_max = sentiment_features_long['t'].max()
-    sentiment_features_long_last = sentiment_features_long[sentiment_features_long['t'] == t_max]
-    sentiment_features_long_last.to_csv(
-        os.path.join(OUTPUT_DIR, f"sentiment_features_long_last_{timestamp}.csv"),
-        index=False
+    save_sentiment_data(
+        output_dir=sentiment_dump_dir,
+        updated_sentiment_df=updated_sentiment_df,
+        dataset_date_str=dataset_date_str,
+        arctic_library=arctic_library,
+        logger=logger,
+        overwrite=False,
     )
 
     # If updating with 1D zoom, we only want the sentiment at market close
     if zoom == "1D":
-        market_close = pd.Timestamp('16:00:00').tz_localize(EASTERN_TZ).time()
-        updated_sentiment_df = updated_sentiment_df[updated_sentiment_df.index.time == market_close]
+        market_close = pd.Timestamp("16:00:00").tz_localize(EASTERN_TZ).time()
+        updated_sentiment_df = updated_sentiment_df[
+            updated_sentiment_df.index.time == market_close
+        ]
 
     if add_new_columns:
         # If adding new tickers, get all data before current time
@@ -104,6 +108,7 @@ def _download_and_update_sentiment_data(
             logger,
             add_new_columns=add_new_columns,
         )
+
 
 # Needs many arguments for flexibility
 # pylint: disable=too-many-arguments
@@ -144,7 +149,7 @@ def _update_base_dataset_symbol(
             new_metadata=new_metadata,
             logger=logger,
             prune_previous_versions=True,
-            allow_mismatched_indices=False, # Don't add mismatched rows to existing data
+            allow_mismatched_indices=False,  # Don't add mismatched rows to existing data
         )
     else:
         arctic_db_write_or_append(
@@ -163,6 +168,7 @@ def update_sentiment_data(
     tickers: list,
     logger: object,
     portfolio_date: str,
+    sentiment_dump_dir: str = OUTPUT_DIR,
 ) -> None:
     """
     Updates the sentiment data in ArcticDB for the specified tickers and date,
@@ -179,7 +185,8 @@ def update_sentiment_data(
     """
     portfolio_datetime = datetime.strptime(portfolio_date, "%Y-%m-%d")
     portfolio_datetime = ensure_timezone(portfolio_datetime, EASTERN_TZ)
-    current_datetime = datetime.now(EASTERN_TZ)
+    # Refer to last market day for sentiment update
+    current_datetime = get_market_day_from_date(portfolio_date)
 
     if not arctic_library.has_symbol("sentimentNormalized"):
         raise ValueError("sentimentNormalized dataset not found in ArcticDB")
@@ -216,13 +223,15 @@ def update_sentiment_data(
             zoom=zoom_param,
             last_available_datetime=last_available_date,
             current_datetime=current_datetime,
+            dataset_date_str=portfolio_date,
             logger=logger,
             add_new_columns=False,
+            sentiment_dump_dir=sentiment_dump_dir,
         )
     else:
         logger.warning(
-                "Cannot update with today's date because it is before market close."
-            )
+            "Cannot update with today's date because it is before market close."
+        )
 
     if missing_tickers:
         logger.warning("Tickers missing from sentiment data: %s", missing_tickers)
@@ -234,8 +243,10 @@ def update_sentiment_data(
             zoom="ALL",
             last_available_datetime=last_available_date,
             current_datetime=current_datetime,
+            dataset_date_str=portfolio_date,
             logger=logger,
             add_new_columns=True,
+            sentiment_dump_dir=sentiment_dump_dir,
         )
 
     # Check datase fragmentation

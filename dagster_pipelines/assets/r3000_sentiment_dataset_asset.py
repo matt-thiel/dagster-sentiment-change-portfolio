@@ -14,11 +14,15 @@ from dagster_pipelines.config.constants import (
     EASTERN_TZ,
     DEFAULT_LIBRARY_OPTIONS,
 )
-from dagster_pipelines.utils.ticker_utils import get_most_recent_etf_holdings, initialize_ishares_etf_holdings
+from dagster_pipelines.utils.ticker_utils import (
+    get_most_recent_etf_holdings,
+    initialize_ishares_etf_holdings,
+)
 from dagster_pipelines.assets.dataset_updater import update_sentiment_data
 
+
 # Disable too many locals due to function complexity
-# pylint: disable=too-many-locals
+# pylint: disable=too-many-locals, duplicate-code
 @asset(
     required_resource_keys={"arctic_db"},
     ins={"holdings_library": AssetIn("ishares_etf_holdings_asset")},
@@ -40,17 +44,24 @@ def r3000_sentiment_dataset_asset(
     logger = context.log
     arctic_store = context.resources.arctic_db
     library_name = "sentiment_features"
-    ETF_ticker = "IWV" # Use Russell 3000
+    etf_ticker = "IWV"  # Use Russell 3000
 
     # Ensure holdings exist for IWV
     logger.info("Ensuring holdings exist for IWV...")
-    initialize_ishares_etf_holdings(ETF_ticker, holdings_library, logger)
+    initialize_ishares_etf_holdings(etf_ticker, holdings_library, logger)
 
-    ishares_etf_holdings = get_most_recent_etf_holdings(holdings_library, ETF_ticker)
+    ishares_etf_holdings = get_most_recent_etf_holdings(holdings_library, etf_ticker)
+
+    # If debugging, run with a subset of the holdings
+    debug_mode = context.op_config.get("debug_mode", False)
+    if debug_mode:
+        ishares_etf_holdings = ishares_etf_holdings[:10]
 
     # Create the library if it doesn't exist
     if library_name not in arctic_store.list_libraries():
-        arctic_store.create_library(library_name, library_options=DEFAULT_LIBRARY_OPTIONS)
+        arctic_store.create_library(
+            library_name, library_options=DEFAULT_LIBRARY_OPTIONS
+        )
     # Get the library
     arctic_library = arctic_store[library_name]
 

@@ -47,7 +47,9 @@ def sentiment_dataset_asset(
 
     # Create the library if it doesn't exist
     if library_name not in arctic_store.list_libraries():
-        arctic_store.create_library(library_name, library_options=DEFAULT_LIBRARY_OPTIONS)
+        arctic_store.create_library(
+            library_name, library_options=DEFAULT_LIBRARY_OPTIONS
+        )
     # Get the library
     arctic_library = arctic_store[library_name]
 

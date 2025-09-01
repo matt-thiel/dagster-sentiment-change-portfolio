@@ -5,6 +5,8 @@ This module provides utility functions for database maintenance tasks such as
 fragmentation checking and defragmentation of ArcticDB symbols.
 """
 
+import os
+import glob
 from arcticdb.exceptions import ArcticNativeException
 import pandas as pd
 
@@ -249,3 +251,37 @@ def arctic_db_batch_update(
             arctic_library.update(
                 symbol, update_df, prune_previous_versions=prune_previous_versions
             )
+
+
+def compare_files_to_timestamp(
+    output_dir: str, current_timestamp: str, prefix: str, precision: int
+) -> bool:
+    """
+    Check if a sentiment file exists up to the hour timestamp.
+
+    This function checks if there's already a sentiment file saved within the same hour
+    as the current timestamp. For example, if current time is 1:02 PM and there's already
+    a file from 1:01 PM, it will return True to indicate the file should be skipped.
+
+    Args:
+        output_dir (str): Directory where sentiment files are saved.
+        current_timestamp (str): Current timestamp in YYYYMMDDHHMMSS format.
+        prefix (str): Prefix of the file name.
+        precision (int): Number of characters to match in the timestamp.
+
+    Returns:
+        bool: True if a file exists from the same hour, False otherwise.
+    """
+    if not os.path.exists(output_dir):
+        return False
+
+    # Extract hour timestamp (YYYYMMDDHH) from current timestamp
+    hour_timestamp = current_timestamp[:precision]  # YYYYMMDDHH
+
+    # Pattern to match files from the same hour
+    pattern = os.path.join(output_dir, f"{prefix}{hour_timestamp}*.csv")
+
+    # Check if any files exist matching this pattern
+    existing_files = glob.glob(pattern)
+
+    return len(existing_files) > 0
