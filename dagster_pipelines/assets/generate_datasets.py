@@ -56,6 +56,7 @@ def _initialize_resources(
         op_config={
             "etf_ticker_override": etf_ticker,
             "debug_mode": False,
+            "save_datasets_in_run": False,
         },
     )
 
@@ -94,7 +95,6 @@ def generate_sentiment_features(
             If None, a new store will be initialized.
         overwrite: If True, overwrite existing sentiment data files.
             If False, skip if files already exist.
-
     Returns:
         None
 
@@ -127,6 +127,7 @@ def generate_sentiment_features(
         logger=context.log,
         portfolio_date=dataset_date_str,
         sentiment_dump_dir=sentiment_output_dir,
+        save_dataset=False,
     )
 
     # Ensure sentiment data is saved to csv
@@ -198,19 +199,22 @@ def generate_change_portfolio(
 
 if __name__ == "__main__":
     # Example usage of the module functions
-    date_str = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
+    #date_str = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
+    date_str = "2025-08-26"
     OVERWRITE = True
 
     for ticker in ["IWM", "IWV", "IWB", "SPY"]:
+        sentiment_output_dir = OUTPUT_DIR + f"/{ticker}_sentiment_dataset"
+        portfolio_output_dir = OUTPUT_DIR + f"/{ticker}_sentiment_change_portfolio"
         generate_sentiment_features(
             etf_ticker=ticker,
-            sentiment_output_dir=OUTPUT_DIR + f"/{ticker}",
+            sentiment_output_dir=sentiment_output_dir,
             dataset_date_str=date_str,
             overwrite=OVERWRITE,
         )
         generate_change_portfolio(
             etf_ticker=ticker,
-            portfolio_output_dir=OUTPUT_DIR + f"/{ticker}",
+            portfolio_output_dir=portfolio_output_dir,
             dataset_date_str=date_str,
             overwrite=OVERWRITE,
         )

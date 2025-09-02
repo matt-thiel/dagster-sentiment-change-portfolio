@@ -12,7 +12,6 @@ Assets interact with ArcticDB (on S3), StockTwits, and vBase for data storage an
 """
 
 import os
-from pathlib import Path
 from datetime import datetime
 from arcticdb.version_store.library import Library
 from dotenv import load_dotenv
@@ -44,6 +43,7 @@ from dagster_pipelines.assets.dataset_updater import update_sentiment_data
 from dagster_pipelines.config.constants import PORTFOLIO_PARTITIONS_DEF, OUTPUT_DIR
 from dagster_pipelines.utils.ticker_utils import get_ishares_etf_tickers
 from dagster_pipelines.utils.sentiment_utils import save_sentiment_data
+from dagster_pipelines.utils.portfolio_utils import save_portfolio_data
 
 
 # pylint: disable=too-many-locals
@@ -99,7 +99,7 @@ def portfolio_asset(
 
     # If running in debug mode, use the ETF ticker override.
     etf_ticker = context.op_config.get("etf_ticker_override", ETF_TICKER)
-
+    save_datasets_in_run = context.op_config.get("save_datasets_in_run", False)
     try:
         # Get the tickers for the partition date.
         ishares_etf_holdings = get_ishares_etf_tickers(
@@ -117,6 +117,7 @@ def portfolio_asset(
             tickers=ishares_etf_holdings,
             logger=context.log,
             portfolio_date=partition_date,
+            save_dataset=save_datasets_in_run,
         )
         # Produce the portfolio for the partition date.
         df_portfolio = produce_portfolio(
@@ -131,11 +132,15 @@ def portfolio_asset(
         context.log.warning(
             "Saving portfolio to S3 and stamping with vBase is not yet implemented."
         )
-        save_path = Path(OUTPUT_DIR + f"/{etf_ticker}")
-        save_path.mkdir(parents=True, exist_ok=True)
-        df_portfolio.to_csv(
-            save_path / f"{etf_ticker}_smt_chg_pf_{partition_date}.csv", index=True
-        )
+
+        if save_datasets_in_run:
+            save_portfolio_data(
+                output_dir=OUTPUT_DIR + f"/{etf_ticker}_sentiment_change_portfolio",
+                portfolio_df=df_portfolio,
+                dataset_timestamp=partition_date,
+                logger=context.log,
+                overwrite=False,
+            )
 
         return df_portfolio
 

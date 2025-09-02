@@ -39,6 +39,7 @@ def _download_and_update_sentiment_data(
     logger: object,
     add_new_columns: bool = False,
     sentiment_dump_dir: str = OUTPUT_DIR,
+    save_dataset: bool = False,
 ) -> None:
     """
     Download and update sentiment data for a list of tickers.
@@ -69,15 +70,15 @@ def _download_and_update_sentiment_data(
     # Save export sentiment dataset CSV.
     # Convert the dataset to a long CSV with the timestamp index preserved
     # and the columns: t, sym, metric, value
-
-    save_sentiment_data(
-        output_dir=sentiment_dump_dir,
-        updated_sentiment_df=updated_sentiment_df,
-        dataset_date_str=dataset_date_str,
-        arctic_library=arctic_library,
-        logger=logger,
-        overwrite=False,
-    )
+    if save_dataset:
+        save_sentiment_data(
+            output_dir=sentiment_dump_dir,
+            updated_sentiment_df=updated_sentiment_df,
+            dataset_date_str=dataset_date_str,
+            arctic_library=arctic_library,
+            logger=logger,
+            overwrite=False,
+        )
 
     # If updating with 1D zoom, we only want the sentiment at market close
     if zoom == "1D":
@@ -177,6 +178,7 @@ def update_sentiment_data(
     logger: object,
     portfolio_date: str,
     sentiment_dump_dir: str = OUTPUT_DIR,
+    save_dataset: bool = False,
 ) -> None:
     """
     Updates the sentiment data in ArcticDB for the specified tickers and date,
@@ -237,6 +239,7 @@ def update_sentiment_data(
             logger=logger,
             add_new_columns=False,
             sentiment_dump_dir=sentiment_dump_dir,
+            save_dataset=save_dataset,
         )
     else:
         logger.warning(
@@ -257,6 +260,7 @@ def update_sentiment_data(
             logger=logger,
             add_new_columns=True,
             sentiment_dump_dir=sentiment_dump_dir,
+            save_dataset=save_dataset,
         )
 
     # Check datase fragmentation

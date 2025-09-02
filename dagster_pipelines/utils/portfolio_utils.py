@@ -4,6 +4,9 @@ Portfolio utilities for sentiment change portfolio dataset.
 
 from pathlib import Path
 import pandas as pd
+import pandas_market_calendars as mcal
+from dagster_pipelines.utils.datetime_utils import ensure_timezone
+from dagster_pipelines.config.constants import EASTERN_TZ
 from dagster_pipelines.utils.database_utils import compare_files_to_timestamp
 
 
@@ -53,7 +56,7 @@ def save_portfolio_data(
         >>> save_portfolio_data(
         ...     output_dir="/path/to/output",
         ...     portfolio_df=my_portfolio_df,
-        ...     dataset_timestamp="20250101120000",
+        ...     dataset_timestamp="2025-01-01",
         ...     logger=my_logger,
         ...     overwrite=False
         ... )
@@ -71,12 +74,22 @@ def save_portfolio_data(
         )
         return
 
+    nyse = mcal.get_calendar("NYSE")
+    schedule = nyse.schedule(
+        start_date=dataset_timestamp,
+        end_date=dataset_timestamp,  # Don't subtract 1 day - include the input date
+    )
+
+    #if schedule.empty:
+    market_close_for_date = ensure_timezone(schedule.iloc[0]["market_close"], EASTERN_TZ)
+    market_close_for_date = market_close_for_date.strftime("%Y%m%d%H%M%S")
+
     save_path = Path(output_dir)
     save_path.mkdir(parents=True, exist_ok=True)
     portfolio_df.to_csv(
-        save_path / f"sentiment_change_portfolio_{dataset_timestamp}.csv", index=True
+        save_path / f"sentiment_change_portfolio_{market_close_for_date}.csv", index=True
     )
     logger.info(
         "Sentiment change portfolio saved to %s",
-        save_path / f"sentiment_change_portfolio_{dataset_timestamp}.csv",
+        save_path / f"sentiment_change_portfolio_{market_close_for_date}.csv",
     )

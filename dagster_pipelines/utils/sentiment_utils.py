@@ -272,7 +272,7 @@ def save_sentiment_data(
     ]
     sentiment_features_long_last.to_csv(
         os.path.join(
-            output_dir, f"sentiment_features_long_last_{dataset_timestamp}.csv"
+            output_dir, f"sentiment_features_{dataset_timestamp}.csv"
         ),
         index=False,
     )
@@ -280,6 +280,6 @@ def save_sentiment_data(
     logger.info(
         "Sentiment csv dump saved to %s",
         os.path.join(
-            output_dir, f"sentiment_features_long_last_{dataset_timestamp}.csv"
+            output_dir, f"sentiment_features_{dataset_timestamp}.csv"
         ),
     )
