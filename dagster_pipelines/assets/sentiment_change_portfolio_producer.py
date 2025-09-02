@@ -86,7 +86,7 @@ def produce_portfolio(
         error_message = (
             f"Current time is before target time ({target_time.strftime('%H:%M')})."
         )
-        logger.error(error_message)
+
         raise ValueError(error_message)
 
     selected_features = [

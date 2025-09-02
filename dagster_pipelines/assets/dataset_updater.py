@@ -133,12 +133,20 @@ def _update_base_dataset_symbol(
     updated_dataset = updated_sentiment_df.xs(symbol, axis=1, level=1)
     previous_metadata = arctic_library.read_metadata(symbol).metadata
 
-    new_metadata = {
-        "date_created": previous_metadata["date_created"],
-        "date_updated": current_datetime.isoformat(),
-        "source": "StockTwits",
-        "last_dagster_run_id": previous_metadata["last_dagster_run_id"],
-    }
+    if previous_metadata is None:
+        new_metadata = {
+            "date_created": current_datetime.isoformat(),
+            "date_updated": current_datetime.isoformat(),
+            "source": "StockTwits",
+            "last_dagster_run_id": None,
+        }
+    else:
+        new_metadata = {
+            "date_created": previous_metadata["date_created"],
+            "date_updated": current_datetime.isoformat(),
+            "source": "StockTwits",
+            "last_dagster_run_id": previous_metadata["last_dagster_run_id"],
+        }
 
     # If adding new tickers, we need to combine the existing dataset with the new data
     if add_new_columns:
@@ -232,7 +240,7 @@ def update_sentiment_data(
         )
     else:
         logger.warning(
-            "Cannot update with today's date because it is before market close."
+            "Current time is before market close, no updates to existing ticker sentiment needed."
         )
 
     if missing_tickers:

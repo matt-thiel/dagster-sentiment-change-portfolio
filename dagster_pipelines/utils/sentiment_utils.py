@@ -67,7 +67,7 @@ def get_symbol_chart(
             timeout=timeout,
         )
         resp.raise_for_status()
-        result = resp.json()  
+        result = resp.json()
 
     except HTTPError as err:
         logger.error("HTTP error occurred: %s", err)
