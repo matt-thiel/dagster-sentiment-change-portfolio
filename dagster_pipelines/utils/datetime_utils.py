@@ -2,10 +2,11 @@
 Datetime utilities for timezone handling and conversions.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import pandas_market_calendars as mcal
 import pandas as pd
+from dagster_pipelines.config.constants import EASTERN_TZ
 
 
 def ensure_timezone(dt: datetime, timezone: pytz.timezone) -> datetime:
@@ -43,7 +44,7 @@ def get_market_day_from_date(date_str: str) -> datetime:
         datetime: The most recent market day as a timezone-aware datetime object.
     """
     nyse = mcal.get_calendar("NYSE")
-    input_date = pd.to_datetime(date_str).date()
+    input_date = pd.to_datetime(date_str)
 
     # Check if the input date is a market day
     schedule = nyse.schedule(
@@ -53,5 +54,14 @@ def get_market_day_from_date(date_str: str) -> datetime:
 
     if len(schedule) == 0:
         raise ValueError(f"No market days found in the past 5 days from {date_str}")
+
+    # Make sure that if called today that we are before market close
+    current_datetime = datetime.now(EASTERN_TZ)
+    if input_date.date() == current_datetime.date():
+        target_mkt_close = schedule["market_close"].iloc[-1] - timedelta(minutes=10)
+        if current_datetime < ensure_timezone(
+            datetime.combine(input_date.date(), target_mkt_close.time()), EASTERN_TZ
+        ):
+            return schedule["market_close"].iloc[-2]
 
     return schedule["market_close"].iloc[-1]

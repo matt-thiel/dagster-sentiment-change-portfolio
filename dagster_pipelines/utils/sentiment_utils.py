@@ -214,7 +214,7 @@ def save_sentiment_data(
     Saves sentiment data to ArcticDB.
     """
     now = datetime.now(EASTERN_TZ)
-    last_market_close = get_market_day_from_date(now.date())
+    last_market_close = get_market_day_from_date(now)
     # current_timestamp = datetime.now(EASTERN_TZ).strftime("%Y%m%d%H%M%S")
     dataset_timestamp = get_market_day_from_date(dataset_date_str)
 

@@ -15,3 +15,6 @@ dagster_portfolio_sample.egg-info/
 
 # WSL files
 *._*
+
+data/
+tmp/

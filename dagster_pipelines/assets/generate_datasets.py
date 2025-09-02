@@ -54,6 +54,7 @@ def _initialize_resources(
         resources={"arctic_db": arctic_store},
         op_config={
             "etf_ticker_override": etf_ticker,
+            "debug_mode": True,
         },
     )
 
@@ -112,6 +113,9 @@ def generate_sentiment_features(
     ishares_etf_holdings = get_ishares_etf_tickers(
         etf_ticker, dataset_date_str, holdings_library, context.log
     )
+
+    if context.op_config.get("debug_mode", True):
+        ishares_etf_holdings = ishares_etf_holdings[:10]
 
     # Update sentiment data if tickers are missing or data is out of date
     # Disable duplicate code warning (similar to dagster approach)

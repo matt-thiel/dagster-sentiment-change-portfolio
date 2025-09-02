@@ -186,7 +186,9 @@ def update_sentiment_data(
     portfolio_datetime = datetime.strptime(portfolio_date, "%Y-%m-%d")
     portfolio_datetime = ensure_timezone(portfolio_datetime, EASTERN_TZ)
     # Refer to last market day for sentiment update
-    current_datetime = get_market_day_from_date(portfolio_date)
+    # Use the below line if only want to update relative to passed date
+    # current_datetime = get_market_day_from_date(portfolio_date)
+    current_datetime = get_market_day_from_date(datetime.now())
 
     if not arctic_library.has_symbol("sentimentNormalized"):
         raise ValueError("sentimentNormalized dataset not found in ArcticDB")
