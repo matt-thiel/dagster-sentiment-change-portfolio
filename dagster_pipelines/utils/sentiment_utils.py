@@ -271,15 +271,11 @@ def save_sentiment_data(
         sentiment_features_long["t"] == t_max
     ]
     sentiment_features_long_last.to_csv(
-        os.path.join(
-            output_dir, f"sentiment_features_{dataset_timestamp}.csv"
-        ),
+        os.path.join(output_dir, f"sentiment_features_{dataset_timestamp}.csv"),
         index=False,
     )
 
     logger.info(
         "Sentiment csv dump saved to %s",
-        os.path.join(
-            output_dir, f"sentiment_features_{dataset_timestamp}.csv"
-        ),
+        os.path.join(output_dir, f"sentiment_features_{dataset_timestamp}.csv"),
     )

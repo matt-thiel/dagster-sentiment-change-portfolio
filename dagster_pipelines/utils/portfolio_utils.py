@@ -80,14 +80,17 @@ def save_portfolio_data(
         end_date=dataset_timestamp,  # Don't subtract 1 day - include the input date
     )
 
-    #if schedule.empty:
-    market_close_for_date = ensure_timezone(schedule.iloc[0]["market_close"], EASTERN_TZ)
+    # if schedule.empty:
+    market_close_for_date = ensure_timezone(
+        schedule.iloc[0]["market_close"], EASTERN_TZ
+    )
     market_close_for_date = market_close_for_date.strftime("%Y%m%d%H%M%S")
 
     save_path = Path(output_dir)
     save_path.mkdir(parents=True, exist_ok=True)
     portfolio_df.to_csv(
-        save_path / f"sentiment_change_portfolio_{market_close_for_date}.csv", index=True
+        save_path / f"sentiment_change_portfolio_{market_close_for_date}.csv",
+        index=True,
     )
     logger.info(
         "Sentiment change portfolio saved to %s",

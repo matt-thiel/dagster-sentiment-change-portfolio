@@ -199,7 +199,7 @@ def generate_change_portfolio(
 
 if __name__ == "__main__":
     # Example usage of the module functions
-    #date_str = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
+    # date_str = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
     date_str = "2025-08-26"
     OVERWRITE = True
 
