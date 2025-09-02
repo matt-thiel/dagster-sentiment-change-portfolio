@@ -8,10 +8,9 @@ import time
 from datetime import datetime
 from json import JSONDecodeError
 from requests import HTTPError, Timeout
-from requests.auth import HTTPBasicAuth
+import cloudscraper
 from tqdm import tqdm
 import pandas as pd
-import requests
 
 from dagster_pipelines.config.constants import EASTERN_TZ, OUTPUT_DIR
 from dagster_pipelines.utils.datetime_utils import get_market_day_from_date
@@ -60,16 +59,15 @@ def get_symbol_chart(
     """
     try:
         url = f"{STOCKTWITS_ENDPOINT}{symbol}/chart"
-        resp = requests.get(
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(
             url,
+            auth=(username, password),
             params={"zoom": zoom},
-            auth=HTTPBasicAuth(username, password),
-            headers={"User-Agent": "curl/8.7.1", "Accept": "application/json"},
             timeout=timeout,
         )
-
         resp.raise_for_status()
-        result = resp.json()
+        result = resp.json()  
 
     except HTTPError as err:
         logger.error("HTTP error occurred: %s", err)

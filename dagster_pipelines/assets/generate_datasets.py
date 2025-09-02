@@ -49,12 +49,13 @@ def _initialize_resources(
     if arctic_store is None:
         arctic_store = arctic_db_resource(build_init_resource_context())
 
+    # Set debug mode to True in order to test code changes
     context = build_op_context(
         partition_key=partition_key,
         resources={"arctic_db": arctic_store},
         op_config={
             "etf_ticker_override": etf_ticker,
-            "debug_mode": True,
+            "debug_mode": False,
         },
     )
 
