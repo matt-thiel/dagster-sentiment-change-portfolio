@@ -58,3 +58,11 @@ DEFAULT_LIBRARY_OPTIONS = LibraryOptions(dynamic_schema=True, dedup=True)
 
 # Output directory for sentiment and portfolio datasets.
 OUTPUT_DIR = "data"
+
+# Add minutes to current timestamp for querying sentiment data.
+# Adding padding just means most recent bar is partial, no lookahead bias.
+# Example: pad=10 means get sentiment bars <= current_time + 10 minutes
+SENTIMENT_TIME_PADDING = 10
+
+# ST gives back sentiment data for all dates. Set this to true to only save data for market days.
+SENTIMENT_SAVE_MARKET_DAYS_ONLY = True

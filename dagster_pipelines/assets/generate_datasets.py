@@ -132,6 +132,7 @@ def generate_sentiment_features(
 
     # Ensure sentiment data is saved to csv
     save_sentiment_data(
+        tickers=ishares_etf_holdings,
         output_dir=sentiment_output_dir,
         arctic_library=sentiment_library,
         dataset_date_str=dataset_date_str,
@@ -204,17 +205,17 @@ if __name__ == "__main__":
     OVERWRITE = True
 
     for ticker in ["IWM", "IWV", "IWB", "SPY"]:
-        sentiment_output_dir = OUTPUT_DIR + f"/{ticker}_sentiment_dataset"
-        portfolio_output_dir = OUTPUT_DIR + f"/{ticker}_sentiment_change_portfolio"
+        sentiment_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_dataset"
+        portfolio_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_change_portfolio"
         generate_sentiment_features(
             etf_ticker=ticker,
-            sentiment_output_dir=sentiment_output_dir,
+            sentiment_output_dir=sentiment_out_dir,
             dataset_date_str=date_str,
             overwrite=OVERWRITE,
         )
         generate_change_portfolio(
             etf_ticker=ticker,
-            portfolio_output_dir=portfolio_output_dir,
+            portfolio_output_dir=portfolio_out_dir,
             dataset_date_str=date_str,
             overwrite=OVERWRITE,
         )

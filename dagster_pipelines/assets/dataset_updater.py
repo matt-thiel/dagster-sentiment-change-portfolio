@@ -19,11 +19,14 @@ from dagster_pipelines.utils.sentiment_utils import (
 from dagster_pipelines.utils.datetime_utils import (
     ensure_timezone,
     get_market_day_from_date,
+    get_timedelta_market_days,
 )
 from dagster_pipelines.config.constants import (
     EASTERN_TZ,
     BASE_DATASET_SYMBOLS,
     OUTPUT_DIR,
+    SENTIMENT_TIME_PADDING,
+    SENTIMENT_SAVE_MARKET_DAYS_ONLY,
 )
 
 
@@ -35,11 +38,8 @@ def _download_and_update_sentiment_data(
     zoom: str,
     last_available_datetime: datetime,
     current_datetime: datetime,
-    dataset_date_str: str,
     logger: object,
     add_new_columns: bool = False,
-    sentiment_dump_dir: str = OUTPUT_DIR,
-    save_dataset: bool = False,
 ) -> None:
     """
     Download and update sentiment data for a list of tickers.
@@ -67,18 +67,11 @@ def _download_and_update_sentiment_data(
         logger=logger,
     ).select_dtypes(include=["float64", "int64"])
 
-    # Save export sentiment dataset CSV.
-    # Convert the dataset to a long CSV with the timestamp index preserved
-    # and the columns: t, sym, metric, value
-    if save_dataset:
-        save_sentiment_data(
-            output_dir=sentiment_dump_dir,
-            updated_sentiment_df=updated_sentiment_df,
-            dataset_date_str=dataset_date_str,
-            arctic_library=arctic_library,
-            logger=logger,
-            overwrite=False,
-        )
+    # make sure no partial bars are in the dataset
+    updated_sentiment_df = updated_sentiment_df[
+        updated_sentiment_df.index
+        <= current_datetime + pd.Timedelta(minutes=SENTIMENT_TIME_PADDING)
+    ]
 
     # If updating with 1D zoom, we only want the sentiment at market close
     if zoom == "1D":
@@ -90,13 +83,19 @@ def _download_and_update_sentiment_data(
     if add_new_columns:
         # If adding new tickers, get all data before current time
         updated_sentiment_df = updated_sentiment_df[
-            (updated_sentiment_df.index < current_datetime)
+            (
+                updated_sentiment_df.index
+                <= current_datetime + pd.Timedelta(minutes=SENTIMENT_TIME_PADDING)
+            )
         ]
     else:
         # If updating existing tickers, filter out existing data
         updated_sentiment_df = updated_sentiment_df[
             (updated_sentiment_df.index > last_available_datetime)
-            & (updated_sentiment_df.index < current_datetime)
+            & (
+                updated_sentiment_df.index
+                <= current_datetime + pd.Timedelta(minutes=SENTIMENT_TIME_PADDING)
+            )
         ]
 
     # Updates data for both sentiment and message volume
@@ -198,7 +197,8 @@ def update_sentiment_data(
     # Refer to last market day for sentiment update
     # Use the below line if only want to update relative to passed date
     # current_datetime = get_market_day_from_date(portfolio_date)
-    current_datetime = get_market_day_from_date(datetime.now())
+    now = datetime.now(EASTERN_TZ)
+    current_datetime = get_market_day_from_date(now)
 
     if not arctic_library.has_symbol("sentimentNormalized"):
         raise ValueError("sentimentNormalized dataset not found in ArcticDB")
@@ -208,7 +208,16 @@ def update_sentiment_data(
     symbol_tail = arctic_library.tail("sentimentNormalized", n=1).data
     earliest_available_date = symbol_head.index.min()
     last_available_date = symbol_tail.index.max()
-    timedelta_to_last = (current_datetime - last_available_date).days
+    # UUse current_datetime (market day) for timedelta so it only updates missing market days
+    if SENTIMENT_SAVE_MARKET_DAYS_ONLY:
+        timedelta_to_last = get_timedelta_market_days(
+            start_date=last_available_date,
+            end_date=current_datetime,
+            prune_end_date=False,
+        )
+
+    else:
+        timedelta_to_last = (current_datetime - last_available_date).days
 
     dataset_cols = symbol_tail.columns.tolist()
 
@@ -222,11 +231,13 @@ def update_sentiment_data(
     # Update dataset with current data regardless of portfolio date.
     if timedelta_to_last >= 1:
         # If more than 1 day since last update, update all data
-        logger.warning(
-            "No recent sentiment data for %s, updating...", portfolio_datetime
-        )
+        logger.warning("No recent sentiment data for %s, updating...", current_datetime)
         # Select lookback window to only download what is needed
-        zoom_param = select_zoom(timedelta_to_last)
+        # Zoom timedelta is different than timedelta to last.
+        # This is because ST will query from now and give partial bars if before close.
+        # Fixes issue where mkt day td is 1 but now is 2 days ahead
+        zoom_timedelta = (now - last_available_date).days
+        zoom_param = select_zoom(zoom_timedelta)
 
         # Only update existing, missing tickers are added in next step
         _download_and_update_sentiment_data(
@@ -235,11 +246,8 @@ def update_sentiment_data(
             zoom=zoom_param,
             last_available_datetime=last_available_date,
             current_datetime=current_datetime,
-            dataset_date_str=portfolio_date,
             logger=logger,
             add_new_columns=False,
-            sentiment_dump_dir=sentiment_dump_dir,
-            save_dataset=save_dataset,
         )
     else:
         logger.warning(
@@ -256,11 +264,22 @@ def update_sentiment_data(
             zoom="ALL",
             last_available_datetime=last_available_date,
             current_datetime=current_datetime,
-            dataset_date_str=portfolio_date,
             logger=logger,
             add_new_columns=True,
-            sentiment_dump_dir=sentiment_dump_dir,
-            save_dataset=save_dataset,
+        )
+
+    # Save export sentiment dataset CSV.
+    # Convert the dataset to a long CSV with the timestamp index preserved
+    # and the columns: t, sym, metric, value
+    if save_dataset:
+        save_sentiment_data(
+            tickers=tickers,
+            output_dir=sentiment_dump_dir,
+            updated_sentiment_df=None,
+            dataset_date_str=portfolio_date,
+            arctic_library=arctic_library,
+            logger=logger,
+            overwrite=False,
         )
 
     # Check datase fragmentation

@@ -7,18 +7,21 @@ from datetime import datetime
 import os
 from dagster import asset, AssetIn, AssetExecutionContext
 from arcticdb.version_store.library import Library
+import pandas as pd
 
 from dagster_pipelines.utils.sentiment_utils import get_chart_for_symbols
 from dagster_pipelines.config.constants import (
     BASE_DATASET_SYMBOLS,
     EASTERN_TZ,
     DEFAULT_LIBRARY_OPTIONS,
+    SENTIMENT_TIME_PADDING,
 )
 from dagster_pipelines.utils.ticker_utils import (
     get_most_recent_etf_holdings,
     initialize_ishares_etf_holdings,
 )
 from dagster_pipelines.assets.dataset_updater import update_sentiment_data
+from dagster_pipelines.utils.datetime_utils import get_market_day_from_date
 
 
 # Disable too many locals due to function complexity
@@ -69,7 +72,7 @@ def r3000_sentiment_dataset_asset(
     st_username = os.environ["STOCKTWITS_USERNAME"]
     st_password = os.environ["STOCKTWITS_PASSWORD"]
 
-    current_time = datetime.now(EASTERN_TZ)
+    current_time = get_market_day_from_date(datetime.now(EASTERN_TZ))
 
     # Code similar to sentiment updater, disable warning
     # pylint: disable=duplicate-code
@@ -85,7 +88,10 @@ def r3000_sentiment_dataset_asset(
         ).select_dtypes(include=["float64", "int64"])
 
         # Select only data before the current time
-        sentiment_features = sentiment_features[sentiment_features.index < current_time]
+        sentiment_features = sentiment_features[
+            sentiment_features.index
+            <= current_time + pd.Timedelta(minutes=SENTIMENT_TIME_PADDING)
+        ]
 
         metadata = {
             "date_created": current_time.isoformat(),

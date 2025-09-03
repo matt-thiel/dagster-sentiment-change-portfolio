@@ -51,7 +51,7 @@ from dagster_pipelines.utils.portfolio_utils import save_portfolio_data
     partitions_def=PORTFOLIO_PARTITIONS_DEF,
     ins={
         "holdings_library": AssetIn("ishares_etf_holdings_asset"),
-        "sentiment_library": AssetIn("sentiment_dataset_asset"),
+        "sentiment_library": AssetIn("r3000_sentiment_dataset_asset"),
     },
     required_resource_keys={"arctic_db"},
 )
@@ -188,8 +188,12 @@ def debug_portfolio(date_str: str | None = None) -> None:
             sentiment_library=sentiment_library,
         )
 
+        # Save sentiment data only for current etf holdings
+        holdings_tickers = holdings_library.tail(ticker, n=1).columns.to_list()
+
         # Save the sentiment data to a csv file
         save_sentiment_data(
+            tickers=holdings_tickers,
             output_dir=OUTPUT_DIR + f"/{ticker}",
             arctic_library=sentiment_library,
             dataset_date_str=partition_date,

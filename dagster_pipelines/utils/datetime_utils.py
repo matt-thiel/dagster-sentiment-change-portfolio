@@ -4,9 +4,10 @@ Datetime utilities for timezone handling and conversions.
 
 from datetime import datetime, timedelta
 import pytz
+from pandas.tseries.offsets import CustomBusinessDay
 import pandas_market_calendars as mcal
 import pandas as pd
-from dagster_pipelines.config.constants import EASTERN_TZ
+from dagster_pipelines.config.constants import EASTERN_TZ, SENTIMENT_TIME_PADDING
 
 
 def ensure_timezone(dt: datetime, timezone: pytz.timezone) -> datetime:
@@ -58,10 +59,41 @@ def get_market_day_from_date(date_str: str) -> datetime:
     # Make sure that if called today that we are before market close
     current_datetime = datetime.now(EASTERN_TZ)
     if input_date.date() == current_datetime.date():
-        target_mkt_close = schedule["market_close"].iloc[-1] - timedelta(minutes=10)
+        target_mkt_close = ensure_timezone(
+            schedule["market_close"].iloc[-1]
+            - timedelta(minutes=SENTIMENT_TIME_PADDING),
+            EASTERN_TZ,
+        )
         if current_datetime < ensure_timezone(
             datetime.combine(input_date.date(), target_mkt_close.time()), EASTERN_TZ
         ):
-            return schedule["market_close"].iloc[-2]
+            return ensure_timezone(schedule["market_close"].iloc[-2], EASTERN_TZ)
 
-    return schedule["market_close"].iloc[-1]
+    return ensure_timezone(schedule["market_close"].iloc[-1], EASTERN_TZ)
+
+
+def get_market_offset(days: int) -> pd.offsets.CustomBusinessDay:
+    """
+    Creates a market offset using the NYSE calendar.
+    """
+    nyse = mcal.get_calendar("NYSE")
+    return CustomBusinessDay(n=days, calendar=nyse)
+
+
+def get_timedelta_market_days(
+    start_date: datetime, end_date: datetime, prune_end_date: bool = False
+) -> int:
+    """
+    Gets the number of market days between two dates.
+    """
+    nyse = mcal.get_calendar("NYSE")
+    schedule = nyse.schedule(start_date=start_date, end_date=end_date)
+    schedule = schedule.loc[schedule.index.date != start_date.date()]
+
+    if prune_end_date:
+        schedule = schedule[
+            schedule["market_close"]
+            <= end_date + pd.Timedelta(minutes=SENTIMENT_TIME_PADDING)
+        ]
+
+    return len(schedule)

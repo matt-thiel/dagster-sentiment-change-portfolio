@@ -3,16 +3,23 @@ Utilities for fetching and processing sentiment data from StockTwits API.
 """
 
 import os
-import sys
 import time
 from datetime import datetime
 from json import JSONDecodeError
 from requests import HTTPError, Timeout
-import cloudscraper
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import requests
 from tqdm import tqdm
 import pandas as pd
+import pandas_market_calendars as mcal
+import numpy as np
 
-from dagster_pipelines.config.constants import EASTERN_TZ, OUTPUT_DIR
+from dagster_pipelines.config.constants import (
+    EASTERN_TZ,
+    OUTPUT_DIR,
+    SENTIMENT_SAVE_MARKET_DAYS_ONLY,
+)
 from dagster_pipelines.utils.datetime_utils import get_market_day_from_date
 from dagster_pipelines.utils.database_utils import compare_files_to_timestamp
 
@@ -22,7 +29,7 @@ STOCKTWITS_ENDPOINT = (
 
 
 # Disable too many arguments due to arguments necessary for api call
-# pylint: disable=too-many-arguments
+# pylint: disable=too-many-arguments too-many-locals
 def get_symbol_chart(
     symbol: str,
     zoom: str,
@@ -55,32 +62,66 @@ def get_symbol_chart(
         JSONDecodeError: If the response cannot be parsed as valid JSON.
         ConnectionError: If there is a network connection error.
         Timeout: If the request times out.
-        SystemExit: If any of the above errors occur (function calls sys.exit).
     """
+
+    # Create retry strategy
+    retry_strategy = Retry(
+        total=5,
+        backoff_factor=2,
+        status_forcelist=[409, 429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+
+    # Create session with retry adapter
+    session = requests.Session()
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    # Chrome user-agent header
+    # pylint: disable=duplicate-code
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+
     try:
         url = f"{STOCKTWITS_ENDPOINT}{symbol}/chart"
-        scraper = cloudscraper.create_scraper()
-        resp = scraper.get(
+
+        resp = session.get(
             url,
             auth=(username, password),
             params={"zoom": zoom},
             timeout=timeout,
+            headers=headers,
         )
+
         resp.raise_for_status()
         result = resp.json()
 
     except HTTPError as err:
-        logger.error("HTTP error occurred: %s", err)
-        sys.exit(f"HTTP error occurred: {err}")
+        if err.response.status_code == 409:
+            logger.warning(f"Conflict error for {symbol}: {err}")
+        elif err.response.status_code == 429:
+            logger.warning(f"Rate limited for {symbol}: {err}")
+        else:
+            logger.error(f"HTTP error {err.response.status_code} for {symbol}: {err}")
+        raise  # Re-raise to let caller handle
+
     except JSONDecodeError as err:
-        logger.error("JSON Decode Error: %s", err)
-        sys.exit(f"JSON Decode Error: {err}")
+        logger.error(f"JSON Decode Error for {symbol}: {err}")
+        raise
+
     except ConnectionError as err:
-        logger.error("Connection Error: %s", err)
-        sys.exit(f"Connection Error: {err}")
+        logger.error(f"Connection Error for {symbol}: {err}")
+        raise
+
     except Timeout as err:
-        logger.error("Timeout Error: %s", err)
-        sys.exit(f"Timeout Error: {err}")
+        logger.error(f"Timeout Error for {symbol}: {err}")
+        raise
 
     response_df = pd.DataFrame.from_dict(result["data"], orient="index")
 
@@ -161,6 +202,15 @@ def get_chart_for_symbols(
 
     dfs.clear()
 
+    if SENTIMENT_SAVE_MARKET_DAYS_ONLY:
+        market_days = mcal.get_calendar("NYSE").schedule(
+            start_date=combined_df.index.min(),
+            end_date=combined_df.index.max(),
+        )
+        combined_df = combined_df[
+            np.isin(combined_df.index.date, market_days.index.date)
+        ]
+
     return combined_df
 
 
@@ -186,8 +236,8 @@ def select_zoom(days_to_query: int) -> str:
             - 'ALL' for all available data
     """
     zooms = [
-        # (1, "1D"),
-        (2, "1D"),
+        (1, "1D"),
+        # (2, "1D"),
         # (7, "1W"),
         (30, "1M"),
         (90, "3M"),
@@ -201,6 +251,7 @@ def select_zoom(days_to_query: int) -> str:
 
 
 def save_sentiment_data(
+    tickers: list[str],
     output_dir: str,
     arctic_library: object,
     dataset_date_str: str,
@@ -264,7 +315,11 @@ def save_sentiment_data(
     sentiment_features_long = updated_sentiment_df.stack(
         level=[0, 1], future_stack=True
     ).reset_index()
-    sentiment_features_long.columns = ["t", "sym", "metric", "value"]
+    sentiment_features_long.columns = ["t", "metric", "sym", "value"]
+    # Filter to tickers
+    sentiment_features_long = sentiment_features_long[
+        sentiment_features_long["sym"].isin(tickers)
+    ]
     # Subset to the latest timestamp.
     t_max = sentiment_features_long["t"].max()
     sentiment_features_long_last = sentiment_features_long[
