@@ -187,6 +187,8 @@ def update_sentiment_data(
     portfolio_datetime = ensure_timezone(portfolio_datetime, EASTERN_TZ)
     # Refer to last market day for sentiment update
     current_datetime = get_market_day_from_date(portfolio_date)
+    logger.info(f"update_sentiment_data(): portfolio_date = {portfolio_date}")
+    logger.info(f"update_sentiment_data(): current_datetime = {current_datetime}")
 
     if not arctic_library.has_symbol("sentimentNormalized"):
         raise ValueError("sentimentNormalized dataset not found in ArcticDB")
@@ -197,6 +199,8 @@ def update_sentiment_data(
     earliest_available_date = symbol_head.index.min()
     last_available_date = symbol_tail.index.max()
     timedelta_to_last = (current_datetime - last_available_date).days
+    logger.info(f"update_sentiment_data(): last_available_date = {last_available_date}")
+    logger.info(f"update_sentiment_data(): timedelta_to_last = {timedelta_to_last}")
 
     dataset_cols = symbol_tail.columns.tolist()
 

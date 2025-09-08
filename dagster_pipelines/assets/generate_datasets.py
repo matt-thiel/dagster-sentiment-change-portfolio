@@ -199,12 +199,24 @@ if __name__ == "__main__":
     for ticker in ["IWM", "IWV", "IWB", "SPY"]:
         generate_sentiment_features(
             etf_ticker=ticker,
+            # TODO: This codepath needs to be changed
+            # to use the schema where each dataset is in its own folder
+            # the folder name is the collection name,
+            # and only files to be stamped for that collection are in that folder:
+            # iwm_sentiment_dataset
+            # spy_sentiment_dataset
             sentiment_output_dir=OUTPUT_DIR + f"/{ticker}",
             dataset_date_str=date_str,
             overwrite=OVERWRITE,
         )
         generate_change_portfolio(
             etf_ticker=ticker,
+            # TODO: This codepath needs to be changed
+            # to use the schema where each dataset is in its own folder
+            # the folder name is the collection name,
+            # and only files to be stamped for that collection are in that folder:
+            # iwm_sentiment_change_portfolio
+            # spy_sentiment_change_portfolio
             portfolio_output_dir=OUTPUT_DIR + f"/{ticker}",
             dataset_date_str=date_str,
             overwrite=OVERWRITE,
