@@ -15,6 +15,7 @@ from dagster_pipelines.utils.sentiment_utils import save_sentiment_data
 from dagster_pipelines.assets.sentiment_change_portfolio_asset import portfolio_asset
 from dagster_pipelines.config.constants import EASTERN_TZ, OUTPUT_DIR
 from dagster_pipelines.utils.portfolio_utils import save_portfolio_data
+from dagster_pipelines.utils.datetime_utils import get_market_day_from_date
 from dagster_pipelines.resources import arctic_db_resource
 
 
@@ -201,12 +202,15 @@ def generate_change_portfolio(
 if __name__ == "__main__":
     # Example usage of the module functions
     # date_str = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
-    date_str = "2025-08-26"
+    # Get the last completed market day using NYSE market calendar
+    current_date = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
+    last_market_day = get_market_day_from_date(current_date)
+    date_str = last_market_day.strftime("%Y-%m-%d")
     OVERWRITE = True
 
     for ticker in ["IWM", "IWV", "IWB", "SPY"]:
-        sentiment_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_dataset"
-        portfolio_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_change_portfolio"
+        sentiment_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_dataset".lower()
+        portfolio_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_change_portfolio".lower()
         generate_sentiment_features(
             etf_ticker=ticker,
             sentiment_output_dir=sentiment_out_dir,
