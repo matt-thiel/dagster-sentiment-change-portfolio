@@ -67,3 +67,4 @@ OUTPUT_DIR = "/work/data/output"
 SENTIMENT_TIME_PADDING = 10
 
 # ST gives back sentiment data for all dates. Set this to true to only save data for market days.
+SENTIMENT_SAVE_MARKET_DAYS_ONLY = True
