@@ -13,7 +13,7 @@ import pandas_market_calendars as mcal
 import numpy as np
 
 from dagster_pipelines.utils.datetime_utils import ensure_timezone
-from dagster_pipelines.config.constants import EASTERN_TZ
+from dagster_pipelines.config.constants import EASTERN_TZ, SENTIMENT_TIME_PADDING
 from dagster_pipelines.assets.sentiment_change_feature import (
     get_sentiment_change_feature,
 )
@@ -63,7 +63,9 @@ def produce_portfolio(
         raise ValueError(f"No trading on {portfolio_date}.")
 
     # Calculate the target time (10 minutes before market close).
-    target_time = schedule.iloc[0]["market_close"] - timedelta(minutes=10)
+    target_time = schedule.iloc[0]["market_close"] - timedelta(
+        minutes=SENTIMENT_TIME_PADDING
+    )
     logger.info(
         f"Market close time for {portfolio_date}: "
         f"{schedule.iloc[0]['market_close'].strftime('%H:%M')}"
@@ -86,7 +88,7 @@ def produce_portfolio(
         error_message = (
             f"Current time is before target time ({target_time.strftime('%H:%M')})."
         )
-        logger.error(error_message)
+
         raise ValueError(error_message)
 
     selected_features = [

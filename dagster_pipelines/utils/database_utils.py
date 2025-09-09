@@ -233,9 +233,22 @@ def arctic_db_batch_update(
             # Overwrites exsiting with batch and adds new rows/columns.
             update_df = batch.combine_first(existing_batch)
         else:
-            # assign() efficiently handles both updating existing columns and adding new ones
-            # Create a copy to defragment the DataFrame and avoid performance warnings
-            update_df = existing_batch.copy().assign(**batch)
+            # Use update() for existing columns (very efficient) and pd.concat for new columns
+            # This avoids fragmentation warnings and will not add mismatched rows.
+            update_df = existing_batch.copy()
+            update_df.update(batch)
+
+            # Get only new columns that don't exist in existing_batch
+            new_columns = batch.columns.difference(existing_batch.columns)
+            if len(new_columns) > 0:
+                # Use pd.concat with inner join to add only new columns efficiently
+                # This keeps all rows from update_df and adds new columns for those rows
+                new_cols_df = batch[new_columns]
+                # Ensure that indicies match, if not add nan for mismatched rows.
+                if not update_df.index.equals(new_cols_df.index):
+                    new_cols_df = new_cols_df.reindex(update_df.index)
+
+                update_df = pd.concat([update_df, new_cols_df], axis=1, join="inner")
 
         batch_start += batch_size
 

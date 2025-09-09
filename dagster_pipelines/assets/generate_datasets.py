@@ -49,11 +49,14 @@ def _initialize_resources(
     if arctic_store is None:
         arctic_store = arctic_db_resource(build_init_resource_context())
 
+    # Set debug mode to True in order to test code changes
     context = build_op_context(
         partition_key=partition_key,
         resources={"arctic_db": arctic_store},
         op_config={
             "etf_ticker_override": etf_ticker,
+            "debug_mode": False,
+            "save_datasets_in_run": False,
         },
     )
 
@@ -92,7 +95,6 @@ def generate_sentiment_features(
             If None, a new store will be initialized.
         overwrite: If True, overwrite existing sentiment data files.
             If False, skip if files already exist.
-
     Returns:
         None
 
@@ -113,6 +115,9 @@ def generate_sentiment_features(
         etf_ticker, dataset_date_str, holdings_library, context.log
     )
 
+    if context.op_config.get("debug_mode", True):
+        ishares_etf_holdings = ishares_etf_holdings[:10]
+
     # Update sentiment data if tickers are missing or data is out of date
     # Disable duplicate code warning (similar to dagster approach)
     # pylint: disable=duplicate-code
@@ -122,10 +127,12 @@ def generate_sentiment_features(
         logger=context.log,
         portfolio_date=dataset_date_str,
         sentiment_dump_dir=sentiment_output_dir,
+        save_dataset=False,
     )
 
     # Ensure sentiment data is saved to csv
     save_sentiment_data(
+        tickers=ishares_etf_holdings,
         output_dir=sentiment_output_dir,
         arctic_library=sentiment_library,
         dataset_date_str=dataset_date_str,
@@ -193,31 +200,22 @@ def generate_change_portfolio(
 
 if __name__ == "__main__":
     # Example usage of the module functions
-    date_str = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
+    # date_str = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
+    date_str = "2025-08-26"
     OVERWRITE = True
 
     for ticker in ["IWM", "IWV", "IWB", "SPY"]:
+        sentiment_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_dataset"
+        portfolio_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_change_portfolio"
         generate_sentiment_features(
             etf_ticker=ticker,
-            # TODO: This codepath needs to be changed
-            # to use the schema where each dataset is in its own folder
-            # the folder name is the collection name,
-            # and only files to be stamped for that collection are in that folder:
-            # iwm_sentiment_dataset
-            # spy_sentiment_dataset
-            sentiment_output_dir=OUTPUT_DIR + f"/{ticker}",
+            sentiment_output_dir=sentiment_out_dir,
             dataset_date_str=date_str,
             overwrite=OVERWRITE,
         )
         generate_change_portfolio(
             etf_ticker=ticker,
-            # TODO: This codepath needs to be changed
-            # to use the schema where each dataset is in its own folder
-            # the folder name is the collection name,
-            # and only files to be stamped for that collection are in that folder:
-            # iwm_sentiment_change_portfolio
-            # spy_sentiment_change_portfolio
-            portfolio_output_dir=OUTPUT_DIR + f"/{ticker}",
+            portfolio_output_dir=portfolio_out_dir,
             dataset_date_str=date_str,
             overwrite=OVERWRITE,
         )

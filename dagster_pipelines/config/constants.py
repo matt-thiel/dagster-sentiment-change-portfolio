@@ -60,3 +60,11 @@ DEFAULT_LIBRARY_OPTIONS = LibraryOptions(dynamic_schema=True, dedup=True)
 # The following folder uses the vbase_env_runner folder layout
 # for output datasets.
 OUTPUT_DIR = "/work/data/output"
+
+# Add minutes to current timestamp for querying sentiment data.
+# Adding padding just means most recent bar is partial, no lookahead bias.
+# Example: pad=10 means get sentiment bars <= current_time + 10 minutes
+SENTIMENT_TIME_PADDING = 10
+
+# ST gives back sentiment data for all dates. Set this to true to only save data for market days.
+SENTIMENT_SAVE_MARKET_DAYS_ONLY = True
