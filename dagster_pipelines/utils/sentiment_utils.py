@@ -98,11 +98,9 @@ def get_symbol_chart(
             url,
             auth=(username, password),
             params={"zoom": zoom},
-            auth=(username, password),
             timeout=timeout,
             headers=headers,
-        )
-        
+        )        
         resp.raise_for_status()
         result = resp.json()            
     except HTTPError as err:
