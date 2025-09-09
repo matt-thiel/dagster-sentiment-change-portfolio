@@ -4,6 +4,7 @@ Utilities for fetching and processing sentiment data from StockTwits API.
 
 import os
 import time
+import cloudscraper
 from datetime import datetime
 from json import JSONDecodeError
 from requests import HTTPError, Timeout
@@ -89,19 +90,21 @@ def get_symbol_chart(
     }
 
     try:
+        # Use cloudscraper to avoid being blocked by Cloudflare
+        # when scraping the StockTwits API from various client locations.
         url = f"{STOCKTWITS_ENDPOINT}{symbol}/chart"
-
-        resp = session.get(
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(
             url,
             auth=(username, password),
             params={"zoom": zoom},
+            auth=(username, password),
             timeout=timeout,
             headers=headers,
         )
-
+        
         resp.raise_for_status()
-        result = resp.json()
-
+        result = resp.json()            
     except HTTPError as err:
         if err.response.status_code == 409:
             logger.warning(f"Conflict error for {symbol}: {err}")
