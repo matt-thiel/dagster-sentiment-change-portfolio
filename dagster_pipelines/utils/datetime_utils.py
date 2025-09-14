@@ -56,19 +56,7 @@ def get_market_day_from_date(date_str: str) -> datetime:
     if len(schedule) == 0:
         raise ValueError(f"No market days found in the past 5 days from {date_str}")
 
-    # Make sure that if called today that we are before market close
-    current_datetime = datetime.now(EASTERN_TZ)
-    if input_date.date() == current_datetime.date():
-        target_mkt_close = ensure_timezone(
-            schedule["market_close"].iloc[-1]
-            - timedelta(minutes=SENTIMENT_TIME_PADDING),
-            EASTERN_TZ,
-        )
-        if current_datetime < ensure_timezone(
-            datetime.combine(input_date.date(), target_mkt_close.time()), EASTERN_TZ
-        ):
-            return ensure_timezone(schedule["market_close"].iloc[-2], EASTERN_TZ)
-
+    # Return the last market close prior to the input date.
     return ensure_timezone(schedule["market_close"].iloc[-1], EASTERN_TZ)
 
 

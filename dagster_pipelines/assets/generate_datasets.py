@@ -208,7 +208,7 @@ if __name__ == "__main__":
     date_str = last_market_day.strftime("%Y-%m-%d")
     OVERWRITE = True
 
-    for ticker in ["IWM", "IWV", "IWB", "SPY"]:
+    for ticker in ["IWM", "IWV", "SPY"]:
         sentiment_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_dataset".lower()
         portfolio_out_dir = OUTPUT_DIR + f"/{ticker}_sentiment_change_portfolio".lower()
         generate_sentiment_features(
