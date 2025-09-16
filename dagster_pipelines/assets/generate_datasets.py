@@ -201,7 +201,6 @@ def generate_change_portfolio(
 
 if __name__ == "__main__":
     # Example usage of the module functions
-    # date_str = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
     # Get the last completed market day using NYSE market calendar
     current_date = datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
     last_market_day = get_market_day_from_date(current_date)
