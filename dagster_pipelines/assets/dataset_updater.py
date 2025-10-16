@@ -262,10 +262,13 @@ def update_sentiment_data(
         logger.warning("Tickers missing from sentiment data: %s", missing_tickers)
         logger.warning("Downloading new tickers...")
 
+        zoom_timedelta = (now - last_available_date).days
+        zoom_param = select_zoom(zoom_timedelta)
+
         _download_and_update_sentiment_data(
             arctic_library=arctic_library,
             tickers=missing_tickers,
-            zoom="ALL",
+            zoom=zoom_param,
             last_available_datetime=last_available_date,
             current_datetime=current_datetime,
             logger=logger,
