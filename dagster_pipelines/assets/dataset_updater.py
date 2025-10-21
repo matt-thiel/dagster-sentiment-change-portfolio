@@ -208,7 +208,7 @@ def update_sentiment_data(
     symbol_tail = arctic_library.tail("sentimentNormalized", n=1).data
     earliest_available_date = symbol_head.index.min()
     last_available_date = symbol_tail.index.max()
-    # UUse current_datetime (market day) for timedelta so it only updates missing market days
+    # Use current_datetime (market day) for timedelta so it only updates missing market days
     if SENTIMENT_SAVE_MARKET_DAYS_ONLY:
         timedelta_to_last = get_timedelta_market_days(
             start_date=last_available_date,
