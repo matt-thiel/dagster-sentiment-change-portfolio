@@ -47,28 +47,22 @@ def get_market_day_from_date(date_str: str) -> datetime:
     nyse = mcal.get_calendar("NYSE")
     input_date = pd.to_datetime(date_str)
 
-    # Check if the input date is a market day
+    # Get the recent market days.
     schedule = nyse.schedule(
-        start_date=input_date - pd.Timedelta(days=5),
+        start_date=input_date - pd.Timedelta(days=10),
         end_date=input_date,  # Don't subtract 1 day - include the input date
     )
-
     if len(schedule) == 0:
-        raise ValueError(f"No market days found in the past 5 days from {date_str}")
+        raise ValueError(f"No market days found in the past 10 days from {date_str}")
 
-    # Make sure that if called today that we are before market close
+    # If the last market day is after the current time, drop it.
+    # We want to get the last completed market day
+    # prior to the current time.
     current_datetime = datetime.now(EASTERN_TZ)
-    if input_date.date() == current_datetime.date():
-        target_mkt_close = ensure_timezone(
-            schedule["market_close"].iloc[-1]
-            - timedelta(minutes=SENTIMENT_TIME_PADDING),
-            EASTERN_TZ,
-        )
-        if current_datetime < ensure_timezone(
-            datetime.combine(input_date.date(), target_mkt_close.time()), EASTERN_TZ
-        ):
-            return ensure_timezone(schedule["market_close"].iloc[-2], EASTERN_TZ)
+    if current_datetime < schedule["market_close"].iloc[-1]:
+        schedule = schedule.iloc[:-1]
 
+    # Return the last market close prior to the input date.
     return ensure_timezone(schedule["market_close"].iloc[-1], EASTERN_TZ)
 
 
