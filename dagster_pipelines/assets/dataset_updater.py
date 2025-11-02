@@ -265,15 +265,21 @@ def update_sentiment_data(
         zoom_timedelta = (now - last_available_date).days
         zoom_param = select_zoom(zoom_timedelta)
 
-        _download_and_update_sentiment_data(
-            arctic_library=arctic_library,
-            tickers=missing_tickers,
-            zoom=zoom_param,
-            last_available_datetime=last_available_date,
-            current_datetime=current_datetime,
-            logger=logger,
-            add_new_columns=True,
-        )
+        try:
+            _download_and_update_sentiment_data(
+                arctic_library=arctic_library,
+                tickers=missing_tickers,
+                zoom=zoom_param,
+                last_available_datetime=last_available_date,
+                current_datetime=current_datetime,
+                logger=logger,
+                add_new_columns=True,
+            )
+        except ValueError as _:
+            logger.error(
+                "Failed to fetch updates for tickers: %s",
+                missing_tickers,
+            )
 
     # Save export sentiment dataset CSV.
     # Convert the dataset to a long CSV with the timestamp index preserved

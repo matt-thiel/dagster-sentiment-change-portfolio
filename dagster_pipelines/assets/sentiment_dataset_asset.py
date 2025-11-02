@@ -5,6 +5,7 @@ Ensures sentiment datasets for the given tickers exist in ArcticDB,
 
 from datetime import datetime
 import os
+import pandas as pd
 from dagster import asset, AssetIn, AssetExecutionContext
 from arcticdb.version_store.library import Library
 
@@ -14,6 +15,7 @@ from dagster_pipelines.config.constants import (
     EASTERN_TZ,
     ETF_TICKER,
     DEFAULT_LIBRARY_OPTIONS,
+    SENTIMENT_TIME_PADDING,
 )
 from dagster_pipelines.utils.ticker_utils import get_most_recent_etf_holdings
 
@@ -70,7 +72,9 @@ def sentiment_dataset_asset(
             logger=logger,
         ).select_dtypes(include=["float64", "int64"])
 
-        current_time = datetime.now(EASTERN_TZ)
+        current_time = datetime.now(EASTERN_TZ) + pd.Timedelta(
+            minutes=SENTIMENT_TIME_PADDING
+        )
 
         # Select only data before the current time
         sentiment_features = sentiment_features[sentiment_features.index < current_time]

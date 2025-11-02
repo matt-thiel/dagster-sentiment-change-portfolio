@@ -2,7 +2,7 @@
 Datetime utilities for timezone handling and conversions.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 from pandas.tseries.offsets import CustomBusinessDay
 import pandas_market_calendars as mcal
