@@ -326,5 +326,8 @@ def get_ishares_etf_tickers(
         holdings_row = valid_rows.iloc[-1]
         logger.info("Using universe as of %s", holdings_row.name)
 
-    symbols =  [str(s).strip().upper() for s in holdings_row[holdings_row.notna()].index.tolist()]
+    symbols = [
+        str(s).strip().upper()
+        for s in holdings_row[holdings_row.notna()].index.tolist()
+    ]
     return sorted(list(set(symbols)))

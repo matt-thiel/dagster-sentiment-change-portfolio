@@ -4,12 +4,12 @@ Utilities for fetching and processing sentiment data from StockTwits API.
 
 import os
 import time
-import cloudscraper
 from datetime import datetime
 from json import JSONDecodeError
 from requests import HTTPError, Timeout
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import cloudscraper
 import requests
 from tqdm import tqdm
 import pandas as pd
@@ -100,9 +100,9 @@ def get_symbol_chart(
             params={"zoom": zoom},
             timeout=timeout,
             headers=headers,
-        )        
+        )
         resp.raise_for_status()
-        result = resp.json()            
+        result = resp.json()
     except HTTPError as err:
         if err.response.status_code == 409:
             logger.warning(f"Conflict error for {symbol}: {err}")

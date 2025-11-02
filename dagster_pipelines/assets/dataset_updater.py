@@ -275,8 +275,11 @@ def update_sentiment_data(
                 logger=logger,
                 add_new_columns=True,
             )
-        except ValueError as e:
-            logger.error(f"Could not download sentiment data for missing tickers. Database will not be updated with these tickers: {e}")
+        except ValueError as _:
+            logger.error(
+                "Failed to fetch updates for tickers: %s",
+                missing_tickers,
+            )
 
     # Save export sentiment dataset CSV.
     # Convert the dataset to a long CSV with the timestamp index preserved
