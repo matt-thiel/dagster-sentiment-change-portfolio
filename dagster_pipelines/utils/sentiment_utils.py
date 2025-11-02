@@ -4,6 +4,7 @@ Utilities for fetching and processing sentiment data from StockTwits API.
 
 import os
 import time
+import cloudscraper
 from datetime import datetime
 from json import JSONDecodeError
 from requests import HTTPError, Timeout
@@ -89,19 +90,19 @@ def get_symbol_chart(
     }
 
     try:
+        # Use cloudscraper to avoid being blocked by Cloudflare
+        # when scraping the StockTwits API from various client locations.
         url = f"{STOCKTWITS_ENDPOINT}{symbol}/chart"
-
-        resp = session.get(
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(
             url,
             auth=(username, password),
             params={"zoom": zoom},
             timeout=timeout,
             headers=headers,
-        )
-
+        )        
         resp.raise_for_status()
-        result = resp.json()
-
+        result = resp.json()            
     except HTTPError as err:
         if err.response.status_code == 409:
             logger.warning(f"Conflict error for {symbol}: {err}")
@@ -121,107 +122,6 @@ def get_symbol_chart(
 
     except Timeout as err:
         logger.error(f"Timeout Error for {symbol}: {err}")
-        raise
-
-    response_df = pd.DataFrame.from_dict(result["data"], orient="index")
-
-    response_df.index = pd.to_datetime(response_df.index, utc=True).tz_convert(
-        "America/New_York"
-    )
-
-    return response_df
-
-def get_charts(
-    #symbol: str,
-    zoom: str,
-    username: str,
-    password: str,
-    logger: object,
-    timeout: int = 10,
-) -> pd.DataFrame:
-    """
-    Fetches sentiment chart data for a given stock symbol from StockTwits API.
-
-    This function makes an authenticated request to the StockTwits sentiment API
-    to retrieve historical sentiment data for a specific symbol. The data is
-    returned as a timezone-aware DataFrame with sentiment metrics.
-
-    Args:
-        symbol (str): Stock symbol to fetch sentiment data for (e.g., 'AAPL').
-        zoom (str): Time zoom level for the chart data (e.g., '1D', '1W', '1M').
-        username (str): StockTwits API username for authentication.
-        password (str): StockTwits API password for authentication.
-        logger (object): Logger object for logging messages and errors.
-        timeout (int, optional): Request timeout in seconds. Defaults to 10.
-
-    Returns:
-        pd.DataFrame: DataFrame containing the sentiment chart data with timezone-aware
-            datetime index and sentiment metrics as columns.
-
-    Raises:
-        HTTPError: If the HTTP request fails (4xx or 5xx status codes).
-        JSONDecodeError: If the response cannot be parsed as valid JSON.
-        ConnectionError: If there is a network connection error.
-        Timeout: If the request times out.
-    """
-
-    # Create retry strategy
-    retry_strategy = Retry(
-        total=5,
-        backoff_factor=2,
-        status_forcelist=[409, 429, 500, 502, 503, 504],
-        allowed_methods=["GET"],
-    )
-
-    # Create session with retry adapter
-    session = requests.Session()
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-
-    # Chrome user-agent header
-    # pylint: disable=duplicate-code
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
-
-    try:
-        url = f"{STOCKTWITS_ENDPOINT}/charts"
-
-        resp = session.get(
-            url,
-            auth=(username, password),
-            params={"zoom": zoom},
-            timeout=timeout,
-            headers=headers,
-        )
-
-        resp.raise_for_status()
-        result = resp.json()
-
-    except HTTPError as err:
-        if err.response.status_code == 409:
-            logger.warning(f"Conflict error: {err}")
-        elif err.response.status_code == 429:
-            logger.warning(f"Rate limited: {err}")
-        else:
-            logger.error(f"HTTP error {err.response.status_code}: {err}")
-        raise  # Re-raise to let caller handle
-
-    except JSONDecodeError as err:
-        logger.error(f"JSON Decode Error: {err}")
-        raise
-
-    except ConnectionError as err:
-        logger.error(f"Connection Error: {err}")
-        raise
-
-    except Timeout as err:
-        logger.error(f"Timeout Error: {err}")
         raise
 
     response_df = pd.DataFrame.from_dict(result["data"], orient="index")
@@ -435,65 +335,3 @@ def save_sentiment_data(
         "Sentiment csv dump saved to %s",
         os.path.join(output_dir, f"sentiment_features_{dataset_timestamp}.csv"),
     )
-
-
-if __name__ == "__main__":
-    #x = get_charts(
-    #    zoom="1D",
-    #    username=os.environ["STOCKTWITS_USERNAME"],
-    #    password=os.environ["STOCKTWITS_PASSWORD"],
-   #     logger=None,
-    #)
-    #print(x)
-
-    '''
-  This script uses the "urllib" library to get the sentiment data file.
-  The "gzip" and "shutil" libraries are used to decompress the file.
-  No pip installation is needed as these libraries are part of the standard library.
-    '''
-
-    import urllib.request
-    import base64
-    import gzip
-    import shutil
-    import json
-    import dotenv
-
-    dotenv.load_dotenv()
-
-    username = os.environ["STOCKTWITS_USERNAME"]
-    password = os.environ["STOCKTWITS_PASSWORD"]
-
-    credentials = f"{username}:{password}"
-    encoded_credentials = base64.b64encode(credentials.encode("utf-8")).decode("utf-8")
-    zoom = "1D"
-    output_file = "output.json"
-
-    # Try different variations of the charts endpoint
-    # Option 1: Try without the trailing slash
-    url = f"https://api-gw-prd.stocktwits.com/api-middleware/external/sentiment/v2/charts?zoom=1D"
-    
-    # If that doesn't work, try these alternatives:
-    # url = f"https://api-gw-prd.stocktwits.com/api-middleware/external/sentiment/v2/charts/"
-    # url = f"https://api-gw-prd.stocktwits.com/api-middleware/external/sentiment/v2/chart?zoom={zoom}"
-    # url = f"https://api-gw-prd.stocktwits.com/api-middleware/external/sentiment/v2/chart/"
-
-    # urllib handles redirects (including 307) automatically
-    headers = {
-        "Authorization": f"Basic {encoded_credentials}",
-        #"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    with urllib.request.urlopen(urllib.request.Request(url, headers=headers)) as response:
-        compressed_file = output_file + ".gz"
-        with open(compressed_file, "wb") as f:
-            shutil.copyfileobj(response, f)
-
-    # Decompress
-    with gzip.open(compressed_file, "rb") as f_in:
-        with open(output_file, "wb") as f_out:
-            shutil.copyfileobj(f_in, f_out)
-
-    print(f"✅ File saved to {output_file}")
-
-
-    

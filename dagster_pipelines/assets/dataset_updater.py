@@ -199,6 +199,8 @@ def update_sentiment_data(
     # current_datetime = get_market_day_from_date(portfolio_date)
     now = datetime.now(EASTERN_TZ)
     current_datetime = get_market_day_from_date(now)
+    logger.info(f"update_sentiment_data(): portfolio_date = {portfolio_date}")
+    logger.info(f"update_sentiment_data(): current_datetime = {current_datetime}")
 
     if not arctic_library.has_symbol("sentimentNormalized"):
         raise ValueError("sentimentNormalized dataset not found in ArcticDB")
@@ -218,6 +220,8 @@ def update_sentiment_data(
 
     else:
         timedelta_to_last = (current_datetime - last_available_date).days
+    logger.info(f"update_sentiment_data(): last_available_date = {last_available_date}")
+    logger.info(f"update_sentiment_data(): timedelta_to_last = {timedelta_to_last}")
 
     dataset_cols = symbol_tail.columns.tolist()
 
@@ -258,15 +262,21 @@ def update_sentiment_data(
         logger.warning("Tickers missing from sentiment data: %s", missing_tickers)
         logger.warning("Downloading new tickers...")
 
-        _download_and_update_sentiment_data(
-            arctic_library=arctic_library,
-            tickers=missing_tickers,
-            zoom="ALL",
-            last_available_datetime=last_available_date,
-            current_datetime=current_datetime,
-            logger=logger,
-            add_new_columns=True,
-        )
+        zoom_timedelta = (now - last_available_date).days
+        zoom_param = select_zoom(zoom_timedelta)
+
+        try:
+            _download_and_update_sentiment_data(
+                arctic_library=arctic_library,
+                tickers=missing_tickers,
+                zoom=zoom_param,
+                last_available_datetime=last_available_date,
+                current_datetime=current_datetime,
+                logger=logger,
+                add_new_columns=True,
+            )
+        except ValueError as e:
+            logger.error(f"Could not download sentiment data for missing tickers. Database will not be updated with these tickers: {e}")
 
     # Save export sentiment dataset CSV.
     # Convert the dataset to a long CSV with the timestamp index preserved
