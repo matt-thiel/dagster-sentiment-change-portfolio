@@ -4,6 +4,7 @@ Utilities for fetching and processing sentiment data from StockTwits API.
 
 import os
 import time
+import cloudscraper
 from datetime import datetime
 from json import JSONDecodeError
 from requests import HTTPError, Timeout
