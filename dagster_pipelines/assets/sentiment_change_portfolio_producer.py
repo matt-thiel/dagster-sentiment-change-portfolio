@@ -130,12 +130,13 @@ def produce_portfolio(
         )
 
     # Create trade signals for each ticker
-    for ticker in tickers:
+    for ticker in list(set(x.strip().upper() for x in tickers)):
         long_mask = []
         short_mask = []
         for _, feature_df in feature_dfs.items():
             if ticker not in feature_df.index:
-                signals.append((ticker, np.nan))
+                long_mask.append(False)
+                short_mask.append(False)
                 continue
             long_mask.append(feature_df.loc[ticker] == 10)
             short_mask.append(feature_df.loc[ticker] == 1)
